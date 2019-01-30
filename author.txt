@@ -1,0 +1,8 @@
+Stefan is a Genode developer since 2007. He mostly works on Genode's own kernel
+development 'hw', low-level ARM hardware, and common infrastructure.
+
+*GitHub* [https://github.com/skalk - skalk]
+
+*Twitter* [https://twitter.com/Skalk12 - skalk]
+
+*Company* [https://www.genode-labs.com - Genode Labs]
