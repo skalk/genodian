@@ -1,0 +1,108 @@
+                Copy system state via JTAG
+
+Currently, I'm working on Genode to support NXP's i.MX7 Dual SABRE board.
+In the past, we had to manage a zoo of quite different ARM hardware here
+at Genode Labs including nightly builds and testing. The hardware was
+ranging from ARM1176 to Cortex A15, from Broadcom, Texas Instruments,
+Samsung to NXP SoCs. Having a variety of hardware is good for stressing the
+generic codebase and to make Genode attractive for different user groups,
+but hindering the development of a still moving kernel like Genode's 'hw'.
+
+As a compromise, we decided to skip maintainance of less used, outdated
+boards like Pandaboard, Arndaleboard and Odroid XU. But on the other hand
+to enable the whole series of i.MX SoCs. Thereby, we still keep all ARM
+architectures and processor generations, but use primarily one SoC vendor with
+more or less constant peripherals - keeping the driver maintainance effort low.
+After having support for i.MX53 Quickstart board and i.MX6 Quad Sabrelite,
+consequently I'm now focussing on the i.MX7 Dual SABRE reference board from NXP.
+
+In the past, I often experienced long trouble-shooting in driver development and
+porting, because of missing low-level, central platform configuration with
+respect to clocking, pin configuration and power. Moreover, I recently
+[https://skalk.github.io/2018/10/30/cpu-mem-benchmarks.html - discovered some serious performance regressions] 
+that went into our kernel codebase, regarding cache configuration.
+
+To circumvent those problems, and to succeed in supporting static scenarios
+in the first place, I have found a fast path using Lauterbach's JTAG debugger
+to copy over a working system configuration.
+
+The trick is to power up the JTAG target with a fully fledged Linux system in place.
+Then it is necessary to enable and activate all devices you want to support too.
+For instance, I had to manually bring up the second ethernet card of the i.MX7
+board via the 'ip' tool. Even more serious are all kind of block devices,
+because here Linux heavily tries to lower power consumption. Therefore, it is
+necessary to force Linux to interact with the card. In my example, I directly
+wrote to the whole (empty) sd-card from '/dev/zero' using the 'dd' tool. Now
+when all devices are awake and in use by Linux that means the clock, power and
+I/O pin configurations are ok to drive those devices.
+
+Next you need to enter the JTAG debugger. When choosing 'CPU' -> 'Peripherals'
+it will open a window view showing most SoC device configurations. You can
+unfold all devices you are interested in. In my case, I've unfolded the IOMUX
+controller, the CCM (central clock module) and PMU (power management unit) and
+all its subfolders. Then if you open up the right mouse button's context menu,
+you can choose 'store all open trees to clipboard', which exactly does that.
+The resulting data looks like this:
+
+! // CCM (Clock Control Module)
+! // CCM
+!  PER.Set.simple AD:0x0:0x30380000 %Long 0x0
+!  PER.Set.simple AD:0x0:0x30380004 %Long 0x0
+!  PER.Set.simple AD:0x0:0x30380008 %Long 0x0
+!  PER.Set.simple AD:0x0:0x3038000C %Long 0x0
+! // Input Clocks Registers
+!  PER.Set.simple AD:0x0:0x30380800 %Long 0x2
+!  PER.Set.simple AD:0x0:0x30380804 %Long 0x2
+! ...
+
+What you see here are address/value pairs of the memory mapped I/O registers of
+the devices in its current state. Especially cool is that the tool puts
+read-only registers in a comment. Thereby, you can easily filter out the
+relevant values using vim's rectangular editing or using 'sed'. In the end,
+I have put those values in a big array into the bootstrap component that loads
+our 'hw' kernel. The bootstrap component can be seen as extension to the
+bootloader. It prepares the platform, enables MMU and caches and so on.
+The array can be stripped down by comparing the boot values with ones retrieved
+by the JTAG debugger and filtering out those that stay untouched.
+
+In the past, I've further developed that mechanism for boards without JTAG
+connector, but using the same SoC. With the physical addresses of the
+memory-mapped I/O registers only, we can use tools to retrieve the
+values live in a running Linux instance, like this:
+
+! #!/bin/bash
+!
+! # CCM (Clock Controller Module)
+! CCM=(0x30380000 ...)
+!
+! # PMU (Power Management Unit)
+! PMU=(0x30360400 ...)
+!
+! # IOMUXC (IOMUX Controller)
+! IOMUXC=(0x30340000 ...)
+!
+! function dump_addr_value_array {
+! 	arr=("${!1}")
+! 	echo "echo// $2"
+! 	for addr in ${arr[@]}
+!         do
+! 		value=`devmem2 $addr w | grep "Value at address" | awk '{print
+! $NF}'`
+! 		echo "echo{ $addr, $value },"
+! 	done
+! }
+!
+! echo "static void ** initial_values = {"
+! dump_addr_value_array CCM[@]     "(Clock Controller Module)"
+! dump_addr_value_array PMU[@]     "(Power Management Unit)"
+! dump_addr_value_array IOMUXC[@]     "(IOMUX Controller)"
+! echo "};"
+
+Above script (filled with all values) can be used to setup some basic
+peripherals needed by almost all devices quite fast. Of course, you need to be
+careful when following this approach. There are sometimes clear or set
+registers with another semantic than setting the value you are providing.
+Moreover, when changing the clock frequency to a higher one, it is necessary to
+first increase the voltage values, and vice versa.
+Anyway, in my latest efforts this approach helped me a lot to have a working
+environment for other peripherals in the first place.
