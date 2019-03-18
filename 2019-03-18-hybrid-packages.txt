@@ -1,0 +1,117 @@
+    Tweaking existent packages to your needs
+
+Since the first Sculpt OS version, I have used several virtual-machines
+side-by-side. One for web-browsing, another for e-mail processing, and of course
+one for development purposes. At that time, I had some trouble using those three
+VMs at once with respect to performance and stability using the Rump Ext2
+filesystem server. So, I decided to use dedicated partitions of my hard-drive
+for the VMs instead of image files as block device backend. Although, that early
+problems were solved, I've kept my already installed Linux VMs in the
+corresponding partitions.
+
+To use them in the very first iterations of Sculpt, you had to change several
+routing rules in the Sculpt OS image, add the 'part_block' component and so on.
+Since then, things have become very much easier. Today, everything is already in
+place to use a dedicated partition from one of your hard-drives. The only thing
+left to do is: adding the right label to the route of your component.
+
+Anyway, the upstream Virtualbox VM for Nova package available in nowadays Sculpt
+does not contain the ingredients to use the block service, because it does not
+need it (principle-of-least-privilege). So every time a new Sculpt version
+enters the picture, I have to manually tweak the corresponding
+'pkg/vbox5-nova-sculpt'.
+
+In general, there are two possibilities to add it. Either you make a local copy
+of the original package within the depot of your installation, or you publish
+a modified version so that others can use it too. In the past I useally took the
+lazy option number one. That works like the following.
+
+Creation of a locally modified package
+--------------------------------------
+
+Install the package the usual way. That means in Scult CE you choose:
+
+! +
+!   -> Depot
+!      -> genodelabs
+!        -> Virtual machines ...
+!          -> vbox5-nova-sculpt
+
+Within your Genode installation copy over the 'pkg' and 'raw' packages for
+Virtualbox, e.g.:
+
+! cd /ahci-1.2 # might be different path in your case
+! mkdir -p depot/local/pkg
+! mkdir -p depot/local/raw
+! cp -r depot/genodelabs/pkg/vbox5-nova-sculpt depot/local/pkg/
+! cp -r depot/genodelabs/raw/vbox5-nova-sculpt depot/local/raw/
+
+Then you alter the configuration of the Virtualbox component in
+'depot/local/raw/vbox5-nova-sculpt/{yyyy-mm-dd}/init.config'
+to contain service block in the list of parent-provides rules. Moreover,
+you need to adapt the VFS of the Virtualbox instance itself to contain a block
+entry within the 'dev' directory, like this:
+
+! <dir name="dev">
+!   <log/>
+!   <rtc/>
+!   <block block_buffer_count="128"/>
+! </dir>
+
+At last you change the local copy of the 'pkg' package to use your modified
+'raw' package instead of the upstream one. Therefore you edit
+'depot/local/pkg/vbox5-nova-sculpt/{yyyy-mm-dd}/archives' and change the
+reference to 'local/raw/vbox5-nova-sculpt/{yyyy-mm-dd}'. Now, you are done and
+can reference your local package either directly in your deploy configuration,
+or by creating a corresponding launcher configuration under 'config/launcher'.
+
+Publish a modified package with hybrid providers
+------------------------------------------------
+
+To provide above package to other users as well, I have now created a modified
+version of the package and published it. When doing so, I did not want to
+publish copies of all packages the 'vbox5-nova-sculpt' package references.
+Again, I only wanted to publish the modified 'pkg' and 'raw' packages. On the
+one hand, you do not want to waste disk space by having identical binary and
+source packages side-by-side. On the other hand, if you only provide a different
+configuration that should be visible to the users to ensure that no binary got
+modified.
+
+The problem is: if you create and publish a 'pkg' package, it will create and
+publish all dependencies using your identity - as long as you do not own the
+secret publishing keys of genodelabs ;-).
+
+If you like to publish a meta-package referencing  your modified 'raw' package,
+but 'genodelabs' packages otherwise. This is one possible way to go:
+
+* Checkout the genode branch used for your current Sculpt version
+* Double-check that the hash value of the pkg recipe correspond to your the
+  package you use in your current Sculpt runtime
+* Make your changes to the source tree, e.g.,
+  edit 'repos/ports/recipes/pkg/vbox5-nova-sculpt/runtime'
+* Create the 'genodelabs' variant and your own variant:
+
+! tool/depot/create genodelabs/pkg/vbox5-nova-sculpt UPDATE_VERSIONS=1
+! tool/depot/create skalk/pkg/vbox5-nova-sculpt UPDATE_VERSIONS=1
+
+* Now, you manually tweak the archives file of *your* meta-package in the depot:
+
+! vim depot/skalk/pkg/vbox5-nova-sculpt/{yyyy-mm-dd}/archives
+
+* You have to set all references to 'genodelabs' apart from your modified ones
+* Now, before you publish your modified package, you need the referenced
+  'genodelabs' packages to be available already, otherwise the 'publish' tool
+  will try to publish them too - which is impossible without the correct keys.
+  But if you download it from 'genodelabs' beforehand, the tool won't try to
+  publish it because it is already there:
+
+! tool/depot/download  genodelabs/pkg/vbox5-nova-sculpt/{yyyy-mm-dd}
+
+* Now, your changed 'pkg' can get published and added to your index to be   
+  visible to other users
+
+! tool/depot/publish skalk/pkg/vbox5-nova-sculpt/{yyyy-mm-dd}
+! vim depot/skalk/index/19.02
+! tool/depot/publish skalk/index/19.02
+
+Finally, you only need to upload your packages and index file, et voila!
