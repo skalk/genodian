@@ -115,3 +115,6 @@ but 'genodelabs' packages otherwise. This is one possible way to go:
 ! tool/depot/publish skalk/index/19.02
 
 Finally, you only need to upload your packages and index file, et voila!
+
+; tags used in this posting
+| depot packages virtualbox
