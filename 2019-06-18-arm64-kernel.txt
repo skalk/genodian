@@ -1,0 +1,123 @@
+   Exploring the ARMv8 system level - Part 2
+
+In this blog series I write about my insights when porting Genode's hw kernel to
+ARMv8. In the first [http://genodians.org/skalk/2019-06-17-arm64-kernel - post]
+I've described how to first create a non-functional dummy system image. In this
+post, I want to show how easily you can develop and debug early system level
+startup code when using QEMU.
+
+QEMU as lightweight JTAG alternative
+------------------------------------
+
+Before starting Genode's own hw kernel, which is actually Genode's core component
+running directly on hardware as privileged system code, first another component
+called bootstrap gets executed. Bootstrap is in general responsible to
+initialize all cpu cores, setup the core component's page-tables, and finally
+start core with enabled MMU, caches, and FPU. Afterwards, this bootstrap memory
+is freed again. Thereby, the whole initialization code is not available at
+runtime of the kernel/core.
+
+Bootstrap's early assembler entry path needs to setup an initial stack, fill the
+BSS segment of its binary with zeroes, and has to enable the FPU before jumping
+into the high-level C++ code. Since recent GCC compilers do more aggressive
+optimizations using the FPU - including the exception handling support library -
+this needs to be done quite early.
+
+The compiler taught me the first difference when writing the early assembler
+code for the new ARM architecture. In ARMv8 all ldr/str like instructions cannot
+use the stack pointer register directly anymore. Moreover, there is no push/pop
+anymore, and conditional execution is limited to some conditional branch
+instructions.
+
+To check that every instruction I wrote initially, does exactly what it was supposed
+to do, I inserted an endless loop after every instruction. Thereby one can check what
+was done by starting the scenario in QEMU and pressing '<Ctrl>-a c'.
+Then the QEMU monitor prompt is shown:
+
+! QEMU 3.1.50 monitor - type 'help' for more information
+! (qemu) 
+
+After typing the command 'info registers', one can proof whether the register
+values are the expected ones. After correctly preparing BSS segment and stack
+the register set looked like the following:
+
+! (qemu) info registers
+!  PC=0000000000800040 X00=0000000000804050 X01=000000000082f1d8
+! X02=0000000000000000 X03=0000000000000000 X04=0000000000000000
+! X05=0000000000000000 X06=0000000000000000 X07=0000000000000000
+! X08=0000000000000000 X09=0000000000000000 X10=0000000000000000
+! X11=0000000000000000 X12=0000000000000000 X13=0000000000000000
+! X14=0000000000000000 X15=0000000000000000 X16=0000000000000000
+! X17=0000000000000000 X18=0000000000000000 X19=0000000000000000
+! X20=0000000000000000 X21=0000000000000000 X22=0000000000000000
+! X23=0000000000000000 X24=0000000000000000 X25=0000000000000000
+! X26=0000000000000000 X27=0000000000000000 X28=0000000000000000
+! X29=0000000000000000 X30=0000000000000000  SP=0000000000804050
+! PSTATE=600003cd -ZC- EL3h     FPCR=00000000 FPSR=00000000
+! Q00=0000000000000000:0000000000000000 Q01=0000000000000000:0000000000000000
+! Q02=0000000000000000:0000000000000000 Q03=0000000000000000:0000000000000000
+! Q04=0000000000000000:0000000000000000 Q05=0000000000000000:0000000000000000
+! Q06=0000000000000000:0000000000000000 Q07=0000000000000000:0000000000000000
+! Q08=0000000000000000:0000000000000000 Q09=0000000000000000:0000000000000000
+! Q10=0000000000000000:0000000000000000 Q11=0000000000000000:0000000000000000
+! Q12=0000000000000000:0000000000000000 Q13=0000000000000000:0000000000000000
+! Q14=0000000000000000:0000000000000000 Q15=0000000000000000:0000000000000000
+! Q16=0000000000000000:0000000000000000 Q17=0000000000000000:0000000000000000
+! Q18=0000000000000000:0000000000000000 Q19=0000000000000000:0000000000000000
+! Q20=0000000000000000:0000000000000000 Q21=0000000000000000:0000000000000000
+! Q22=0000000000000000:0000000000000000 Q23=0000000000000000:0000000000000000
+! Q24=0000000000000000:0000000000000000 Q25=0000000000000000:0000000000000000
+! Q26=0000000000000000:0000000000000000 Q27=0000000000000000:0000000000000000
+! Q28=0000000000000000:0000000000000000 Q29=0000000000000000:0000000000000000
+! Q30=0000000000000000:0000000000000000 Q31=0000000000000000:0000000000000000
+
+For checking whether the right memory address got written, I've used the
+function to dump physical memory, like this:
+
+! (qemu) xp /2dx 0x82f000
+! 000000000082f000: 0x00000000 0x00000000
+
+Above command prints two double-words (resp. 64-bit) in hex-format at address
+0x82f000.
+
+A first interesting side-effect, which I observed after entering the high-level
+code, were broken C++ guard variables for the initialization of static objects.
+Again the mystery could be solved, when executing the QEMU command:
+
+! (qemu) info registers -a
+
+This command dumps the register set of all cpu cores at once. As it turned out,
+the QEMU Raspberry Pi 3 model starts all four cpu cores at ones. In former
+versions of QEMU it was common that one had to state the count of cpu cores
+explicitly, so I was suspecting this is also the case in my updated QEMU version
+using the Raspberry Pi 3 machine model. Moreover, on hardware you typically have
+to start resp. wakeup other cpu cores than the boot cpu explicitly.
+Anyway, after realizing that all cpus immediately run through the same assembler
+entry path immediately after QEMU got started, the mysterious C++ guard problem
+was solved. By conditionally zeroing out the BSS segment dependent on the cpu
+identity, the concurreny issue vanished.
+
+There is one short-coming when using QEMU to debug ARMv8 system software. AFAIK
+there is no ready-to-use approach to dump system registers. Apart from the
+PSTATE register, which is dumped together with the general-purpose and FPU
+registers, all other system registers have to be transferred into a
+general-purpose register first to be able to inspect them via the QEMU monitor.
+
+Regarding system registers: what is really eye-catching when writing assembler
+code for ARMv8 is the coherent naming and the nicely readable system register
+names. When formerly transferring the System Control Register (SCTLR) to the
+first common register, one had to write:
+
+! mrc p15, r0, 0, c1, c0, 0
+
+It was always a cryptic combination of opcodes and coprocessor register
+numbers, almost impossible to remember them all. Now, to read the same register
+of exception level 1, you simply write:
+
+! mrs x0, sctlr_el1`
+
+In the next post, I'll write about the ARMv8 exception level organisation and
+bootstrapping, and about changes to the page-table layout.
+
+; tags used in this posting
+| armv8 hw qemu
