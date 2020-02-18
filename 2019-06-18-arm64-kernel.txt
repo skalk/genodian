@@ -12,10 +12,13 @@ QEMU as lightweight JTAG alternative
 Before starting Genode's own hw kernel, which is actually Genode's core component
 running directly on hardware as privileged system code, first another component
 called bootstrap gets executed. Bootstrap is in general responsible to
-initialize all cpu cores, setup the core component's page-tables, and finally
+initialize all CPU cores, setup the core component's page-tables, and finally
 start core with enabled MMU, caches, and FPU. Afterwards, this bootstrap memory
 is freed again. Thereby, the whole initialization code is not available at
-runtime of the kernel/core.
+runtime of the kernel/core. The decoupling of the bootstrap code from the
+kernel has the advantage that the bootstrap code does not need be considered
+as part of the trusted computing base at runtime. I.e., the code cannot be
+misused for an ROP attack by design.
 
 Bootstrap's early assembler entry path needs to setup an initial stack, fill the
 BSS segment of its binary with zeroes, and has to enable the FPU before jumping
@@ -24,22 +27,22 @@ optimizations using the FPU - including the exception handling support library -
 this needs to be done quite early.
 
 The compiler taught me the first difference when writing the early assembler
-code for the new ARM architecture. In ARMv8 all ldr/str like instructions cannot
-use the stack pointer register directly anymore. Moreover, there is no push/pop
-anymore, and conditional execution is limited to some conditional branch
-instructions.
+code for the 64-bit ARM architecture. In contrast to 32-bit ARM, all ldr/str like
+instructions cannot use the stack pointer register directly anymore. Moreover,
+there is no push/pop anymore, and conditional execution is limited to only a few
+conditional branch instructions.
 
-To check that every instruction I wrote initially, does exactly what it was supposed
-to do, I inserted an endless loop after every instruction. Thereby one can check what
-was done by starting the scenario in QEMU and pressing '<Ctrl>-a c'.
+To check that every single instruction I wrote does exactly what it was supposed
+to do, I inserted an infinite loop after each instruction. Thereby one can
+follow the progress by starting the scenario in QEMU and pressing '<Ctrl>-a c'.
 Then the QEMU monitor prompt is shown:
 
 ! QEMU 3.1.50 monitor - type 'help' for more information
 ! (qemu) 
 
-After typing the command 'info registers', one can proof whether the register
-values are the expected ones. After correctly preparing BSS segment and stack
-the register set looked like the following:
+After typing the command 'info registers', one can validate whether the register
+values are the expected ones. After correctly preparing the BSS segment and
+stack, the register set looked like the following:
 
 ! (qemu) info registers
 !  PC=0000000000800040 X00=0000000000804050 X01=000000000082f1d8
@@ -71,7 +74,7 @@ the register set looked like the following:
 ! Q28=0000000000000000:0000000000000000 Q29=0000000000000000:0000000000000000
 ! Q30=0000000000000000:0000000000000000 Q31=0000000000000000:0000000000000000
 
-For checking whether the right memory address got written, I've used the
+For checking whether the right memory address got written, I used the
 function to dump physical memory, like this:
 
 ! (qemu) xp /2dx 0x82f000
@@ -86,24 +89,26 @@ Again the mystery could be solved, when executing the QEMU command:
 
 ! (qemu) info registers -a
 
-This command dumps the register set of all cpu cores at once. As it turned out,
-the QEMU Raspberry Pi 3 model starts all four cpu cores at ones. In former
-versions of QEMU it was common that one had to state the count of cpu cores
-explicitly, so I was suspecting this is also the case in my updated QEMU version
-using the Raspberry Pi 3 machine model. Moreover, on hardware you typically have
-to start resp. wakeup other cpu cores than the boot cpu explicitly.
-Anyway, after realizing that all cpus immediately run through the same assembler
+This command dumps the register set of all CPU cores at once. As it turned out,
+the QEMU Raspberry Pi 3 model starts all four CPU cores automatically, which
+is in contrast to prior versions. Moreover, on hardware the OS kernel
+typically has to start or wake up secondary CPU cores other than the boot CPU
+explicitly.
+Anyway, after realizing that all CPUs immediately run through the same assembler
 entry path immediately after QEMU got started, the mysterious C++ guard problem
-was solved. By conditionally zeroing out the BSS segment dependent on the cpu
-identity, the concurreny issue vanished.
+was solved. By conditionally zeroing out the BSS segment dependent on the CPU
+identity, the concurrency issue vanished.
 
-There is one short-coming when using QEMU to debug ARMv8 system software. AFAIK
-there is no ready-to-use approach to dump system registers. Apart from the
+There is one short-coming when using QEMU to debug ARMv8 system software,
+which is the lacking ability to dump system registers. Apart from the
 PSTATE register, which is dumped together with the general-purpose and FPU
 registers, all other system registers have to be transferred into a
 general-purpose register first to be able to inspect them via the QEMU monitor.
+*UPDATE: when using GDB in combination with QEMU all system registers
+can be read perfectly. Above statement is only valid with regard to the
+QEMU monitor command line interface*
 
-Regarding system registers: what is really eye-catching when writing assembler
+Regarding system registers, what is really eye-catching when writing assembler
 code for ARMv8 is the coherent naming and the nicely readable system register
 names. When formerly transferring the System Control Register (SCTLR) to the
 first common register, one had to write:
@@ -112,7 +117,7 @@ first common register, one had to write:
 
 It was always a cryptic combination of opcodes and coprocessor register
 numbers, almost impossible to remember them all. Now, to read the same register
-of exception level 1, you simply write:
+of exception level 1, one simply writes:
 
 ! mrs x0, sctlr_el1`
 

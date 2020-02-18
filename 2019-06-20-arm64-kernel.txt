@@ -10,63 +10,63 @@ using QEMU.
 This time I'll center on the exception level changes, and the flexible
 page-table layout in ARMv8.
 
-Cleaned exception level
------------------------
+Streamlined exception levels
+----------------------------
 
-If you concentrate on the 64-bit mode in ARMv8 only, things are more clean and
+The ARMv8 ISA is compatible with the 32-bit ARM architecture.
+However, if concentrating on the 64-bit mode in ARMv8 only, things are more clean and
 clear than before. Now there are only exception levels (EL) 0-3, whereby EL0 and
 EL1 co-exist in the secure and non-secure world (keyword: TrustZone).
-Formerly in ARMv7 with security and virtualization extensions available, there
-were additional five exception modes in the privileged system mode (now: EL1),
-which is depicted in the following image:
+Formerly in ARMv7 - with security and virtualization extensions available - there
+were additional five exception modes in the privileged system mode (now: EL1).
+This is depicted in the following image:
 
 [image avirt_modi]
 
-Of course, the complexity is still available in hardware, because the 32-bit
+Of course, the complexity is still present in the hardware because the 32-bit
 compatibility mode does include all those UND, ABT, FIQ, IRQ, SVC, SYS sytem
-levels. But if you concentrate on 64-bit only, you can ignore it, and care about
-EL 0-3 only.
+levels. But when considering a 64-bit-only operating system as we do, one can
+ignore it, and care about EL 0-3 only.
 That also means, there is no need to save/restore banked registers of these
-modes any longer, when implementing a world-switch for TrustZone, or hardware
+modes any longer when implementing a world-switch for TrustZone or hardware
 assisted virtualization.
 
-As already commented in my
-[http://genodians.org/skalk/2019-06-18-arm64-kernel - last post], access to system
-control registers can be done via human-readable names now. Most of these system
+As already mentioned in my
+[http://genodians.org/skalk/2019-06-18-arm64-kernel - last post], access to
+system-control registers can be done via human-readable names now. Most of these system
 registers use the corresponding exception level as appendix, like ELR_EL1 or
 ELR_EL2. The nice thing here is that ARM took the opportunity to smooth some
-register names, and make them consistent accross different privilege resp.
-exception levels. Most prominent example here is: ESR_ELx.
+register names and make them consistent across different privilege
+respectively exception levels. Most prominent example here is ESR_ELx.
 The so called Exception Syndrom Register was introduced in ARMv7 for the
 virtualization extension. It provides one common way to distinguish all kinds of
-exception reasons, like page-faults, alignment errors, unallowed co-processor
+exception reasons, like page-faults, alignment errors, denied co-processor
 access, and so on. Now, the register is available for EL1-3 and has a common
 layout, which is good.
 
 Sadly, ARM did not took the chance to incorporate more exception information
 into that register, e.g. by lifting it from 32-bit to 64-bit width. Therefore,
 there are still different offsets in the exception vector left that needs to be
-distinguished in between, e.g., whether it was an interrupt, or a synchronous
-exception. In my eyes, it would have been better to have a single point of
-exception entry assembler code, which just saves common registers, and allow
+distinguished, e.g., whether an exception was an interrupt or a synchronous
+exception. In our view, it would have been better to have a single point of
+exception entry assembler code, which just saves common registers, and allows
 decision making based on the ESR register in higher level code only.
-
-Anyway, in general I like the path they went with regard to system registers in
-ARMv8.
+That said, in general I appreciate the path ARM went with regard to system
+registers in ARMv8.
 
 Exception return
 ----------------
 
-When starting with the kernel development on QEMU/Rpi3, I recognized that the
+When starting with the kernel work on QEMU/Rpi3, I recognized that the
 machine is started in EL3 (former monitor mode). To prepare the kernel in
-bootstrap, I had to prepare its page-tables and switch the MMU on, and therefore
+bootstrap, I had to prepare its page-tables and switch on the MMU, and therefore
 first leave EL3 to EL1. An exception return is typically done by filling the
 exception level Saved Program Status Register (SPSR) and Link Register (LR) and
-finally call 'eret'. This instruction will atomical restore that program status
-and jump to the address in the link register. If you fill a lower exception
-level into the program status register, you automatically drop privileges.
-When doing so the first time to leave EL3 to EL1, I always landed in the following
-state, shown by the QEMU monitor:
+finally call 'eret'. This instruction will atomically restore the program status
+and jump to the address in the link register. If one assigns a lower exception
+level into the program status register, one automatically drops privileges.
+When doing so the first time to leave EL3 to EL1, I always landed in the
+following state, shown by the QEMU monitor:
 
 ! (qemu) info registers 
 !  PC=0000000000000200 X00=0000000000804060 X01=000000000082f1d8
@@ -85,9 +85,9 @@ state, shown by the QEMU monitor:
 I could see no change in the exception level, but the program counter was
 somewhere near zero. Interestingly, the RAM of the Raspberry Pi 3 starts at
 zero, and if there is no exception vector address set already, I assumed it
-will be zero as well. The assumption that an exception got raised was nearby.
+would be zero as well. I intuitively assumed that an exception got raised.
 So, I decided to setup a very simple exception vector to have a look for the
-reason, and this is how its done:
+reason. This is how its done:
 
 ! ...
 ! ldr x0, =_exception_entry  /* load exception vector address */
@@ -116,7 +116,7 @@ expected.
 Page table sport
 ----------------
 
-The virtual memory related adjustment possibilities are huge in ARMv8. There
+The virtual-memory-related degree of freedom is huge in ARMv8. There
 were already distinguished page-tables for secure monitor, hypervisor,
 kernel/user land in either normal world and secure world before. There was a
 fixed size 2-level page-table in ARMv7 and a 3-level extended edition when using
@@ -124,19 +124,19 @@ the Large Physical Address Extension (LPAE) introducing another page-table set
 for guest-physical to host-physical memory.
 
 Now, all of these page-table sets of course still exist. But there are more
-adjustments possible. First you have to distinguish in between the granularity
+adjustments possible. First, one has to distinguish in between the granularity
 of pages in size of 4KB, 16KB, and 64KB. Not all granularities are necessarily
-supported. You can configure the maximum physical memory size addressable, and
-thereby effectively define how much page-table levels to use (up to four).
+supported by all SoCs. One can configure the maximum physical memory size
+addressable, and thereby effectively define how much page-table levels to use
+(up to four).
 
 Actually, there is no good reason to lower the granularity of pages in Genode.
-The system is optimized for the granularity of 4KB pages, like it is available
+The system is optimized for the granularity of 4 KiB pages like it is available
 on other architectures as well. Because of the limited amount of memory
-available in the embedded ARM boards, we address, I decided to
+available in the embedded ARM boards we address, I decided to
 stay compatible with the already existent ARMv7 LPAE implementation in Genode.
-
-There were only bitfields for the physical address and for the next page-table
-pointer in the page-table descriptors that needed to be widened a bit.
+I merely needed to widen the bit fields for the physical address and for the
+next page-table pointer in the page-table descriptors a bit.
 
 After that, bootstrap finished its work and the kernel was booting until it
 tried to switch to another thread.

@@ -5,10 +5,10 @@ Finally, there were resources left to implement support for the ARMv8
 architecture in Genode's own hw kernel. In the following blog posts I'd like to
 summarize my insights.
 
-For the first steps I decided to take QEMU with the Raspberry Pi 3 model as
-foundation. At that time, I did not had a ARMv8 feasible JTAG debugger. That is
+For the first steps, I decided to take QEMU with the Raspberry Pi 3 model as
+foundation. At that time, I did not had a ARMv8-capable JTAG debugger. That is
 why using QEMU and its capabilities to inspect registers and memory seemed to be
-a good starting point. Moreover, the Raspberry Pi 3 model looked promising,
+a good starting point. Additionally, the Raspberry Pi 3 model looked promising,
 because it is widely used. As it turned out, using QEMU proved sustainable,
 whereby taking the Raspberry Pi 3 model was a less fortunate choice. But, we'll
 come to that later.
@@ -18,26 +18,26 @@ Empty architecture closure
 
 Adding the new architecture to the hw kernel was surprisingly easy.
 I've started to add dummy implementations for the interrupt controller and
-timer. Copied over the system-call interface of x86_64, because it is already
+timer. I mimicked the system-call interface of x86_64 because it is already
 64-bit wide, but changed the necessary register names used therein.
 
 In contrast to the Raspberry Pi 1, which is already supported by Genode, the
 latest Pi 3 uses another UART device model. Luckily, Tomasz Gajewski already
-contributed a driver for it, while working on running Genodeon top of the
+contributed a driver for it while working on running Genode on top of the
 Raspberry Pi 3 in 32-bit compatibility mode. Thereby, I could just re-use his
 driver, which worked perfectly fine.
 
-Additional empty implementation where add for assembler entry pathes of the
-kernel, core, and bootstrap and the exception entry code. Whereby all these
-places where not literally empty, but used an endless loop in the form of:
+Additional, empty implementations were added for the assembler entry paths of the
+kernel, core, and bootstrap, and the exception entry code. Whereby all these
+places were not literally empty but used an infinite loop in the form of:
 
 ! 1: b 1b
 
-Thereby, I could detect furthermore progress step-by-step.
+Thereby, I could follow the progress of execution step-by-step.
 
 Finally, I used the unmodified page-table implementation for the ARMv7 Large
-Physical Address Extensions already used by our Cortex-A7 and Cortex-A15
-platforms, and add a board description header for Raspberry Pi 3 that only
+Physical Address Extensions as already used by our Cortex-A7 and Cortex-A15
+platforms, and added a board description header for Raspberry Pi 3 that only
 contained the memory map of this board.
 
 After creating Makefile library descriptions for startup code, syscalls, linker,
