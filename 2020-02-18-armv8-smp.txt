@@ -1,0 +1,96 @@
+   Exploring the ARMv8 system level - Multi-Cores
+
+Within the past months I collected some experiences with enabling Genode's own hw
+kernel on ARMv8 hardware platforms. A first series of posts covered the
+low-level first steps that had to be taken. In this forth part I like to summarize the
+insights gained by enabling multi-cores of the NXP i.MX 8M SoC, and by
+investigating several other SoCs and its SMP setup.
+
+TrustZone firmware standardization
+----------------------------------
+
+When implementing a multi-processor platform, a common problem is the activation
+and deactivation of cores. When booting up additional cores, the configuration of
+its entrypoints is needed. For power-efficiency reasons, whenever a core is
+not used for a longer time, it should enter a more deep sleep mode.
+
+All these mechanisms used to be implemented in vendor-specific ways in previous ARM
+architectures. But with ARMv8, a de facto standard got asserted, the ARM's 
+[http://static.docs.arm.com/den0022/d/Power_State_Coordination_Interface_PDD_v1_1_DEN0022D.pdf - Power State Coordination Interface]
+(PSCI). It unifies:
+
+* Core idle management.
+* Dynamic addition and removal of cores, and secondary core boot.
+* System shutdown and reset.
+
+But it does not govern voltage and frequency scaling. Nevertheless, it greatly
+simplifies multi-core management for higher-level operating-systems across
+different ARMv8 platforms.
+
+Under the hood, the PSCI back-end functionality is implemented as part of secure
+world software running in EL3 mode that is provided by the SoC vendor. In
+practice, many vendors resort to the ARM Trusted Firmware
+[https://github.com/ARM-software/arm-trusted-firmware - reference implementation],
+which combines various standards:
+
+* Power State Coordination Interface (PSCI)
+* Trusted Board Boot Requirements (TTBR)
+* Secure Monitor Code
+
+The last mentioned standard is simply a calling convention from the non-secure
+world to the trusted firmware. TTBR - as the name suggests - is a formalization of
+the requirements related to firmware signing, certificate handling, and trusted
+boot into the non-secure world in general.
+
+[image tz_firmware 80%]
+  ARM Trusted Firmware Architecture and Boot Flow
+
+The standardization and opening of TrustZone firmware in form of the ARM Trusted
+Firmware was made possible by the introduction of the ARMv8 architecture, which
+does not allow execution of 32-bit legacy code inside secure monitor mode (EL3).
+Due to this rupture, OEM vendors were open to adapt to ARM's reference
+implementation. In terms of security, it reduces complexity of the operating
+system dealing with multi-cores, and it enables the review and confirmability of
+OEM's firmware code.
+Other closed TrustZone firmware alternative, like Qualcomm's QSEE and Trustonic's
+Kinibi, seem to converge to these standards too.
+
+But the form of standardization has a non-obvious drawback too. Actually, the
+EL2 hypervisor mode, and the EL3 secure monitor mode are optional features. On
+the other hand, it seems more unlikely that a SoC vendor will provide a powerful
+ARMv8-A many-core system without those additional exception levels. It would
+mean to break the standard again. Technically speaking, by connecting EL3
+firmware and multi-core administration, ARM made EL3 permanent in such systems.
+From my perspective, there is no strict need for EL2/3 in a mobile platform,
+when having a secure, component-based architecture like Genode running in EL1/2.
+Instead, complexity of the hardware, chip area and power consumption could be
+reduced.
+
+OS-level adaptations for multi-core
+-----------------------------------
+
+Beside the bring-up of secondary CPU-cores, an operating system needs primitives
+to signal in between different CPUs. Typically, an interrupt-controller offers
+software-generated interrupts that can target other CPUs in the form of so
+called Inter-Processor Interrupts (IPIs).
+
+With the new GICv3 interrupt controller, the back-end mechanism to trigger an IPI
+had to be enabled in our practical work using the Genode OS. Everything else
+related to inter-processor communication is not architecture-specific and could
+be reused without modifications.
+
+Power-efficient cross-core locking
+----------------------------------
+
+To protect global data inside non-preemptive kernel paths in-between different
+CPU cores, a different lock implementation is needed. When normal threads enter
+a contended lock, a system-call leads to a scheduling decision. Inside certain
+exception-handling routines of the kernel, this is not possible. Instead of
+spinning and wasting power in such a situation, the CPU can be instructed to
+enter a low-power state via the "WFE" instruction. This energy-efficient
+spin-lock implementation is specific to the instruction set and cannot be
+expressed in high-level languages like C/C++.
+Although not needed functionality-wise, the enablement of this feature was
+necessary to actually use an emulator like QEMU too.
+Otherwise, QEMU simply emulates long spining-loops of CPU-cores in the contention
+case, which renders it unuseable in the context of multiple cores.
