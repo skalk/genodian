@@ -1,0 +1,106 @@
+                Virtual Machine Monitor for ARM
+
+In my last blog post, I described some aspects of ARMv8 hardware-assisted
+virtualization. The presented findings were collected during some exploration
+work I've done together with my colleague Alexander Boettcher during last year.
+As already mentioned, one outcome of this work was a new Virtual Machine Monitor
+(VMM) written from scratch for the ARMv8 architecture. In the meantime the VMM
+got extended to support recent, generic Linux kernels for ARMv8 and ARMv7, and
+thereby supersedes the former, outdated PoC implementation for ARMv7.
+
+Recent interest in the VMM by people aside the Genode core developer team,
+motivated me to summarize the internal structure of its current implementation
+in this article.
+
+Basic information
+-----------------
+
+The VMM is written as a pure C++ Genode component, and gets linked to the
+base-library only. It comprises 2200 SLOC for the generic part including all
+device models, and about 300 SLOC per ARM architecture-specific branch.
+
+It uses the following Genode-APIs:
+
+* Base
+* OS
+* Terminal Session (Pl011 and VirtIO Console)
+* NIC Session (VirtIO Net)
+* VM Session (CPU)
+
+Hence, the VMM is a minimalistic component in a strict sense.
+
+It is structured like the following figure illustrates.
+
+[image vmm-overview]
+  Overview about VMM structure
+
+When the VMM gets started, it first opens up a VM session at core. It requests
+ROM modules for the Linux kernel, initrd, and device-tree blob (dtb), and copies
+all of it to designated areas in a RAM dataspace, which serves as the VM's main
+memory. By attaching the RAM dataspace to the VM session via its region-map
+interface, the dataspace automatically becomes guest-physical memory.
+
+All peripherals of the VM, including the Generic Interrupt Controller (GIC)
+model, get registered at the virtual MMIO bus that is responsible to resolve
+load/store VM faults on its address space. The MMIO bus translates the faults to
+read and write operations of the corresponding device models. All accesses to
+memory regions not assigned to any device model get ignored, or return zero.
+
+The first device model that gets initialized is the GIC model that is used by
+almost all other devices to propagate their virtual interrupts. As next all CPU
+instances get initialized, and finally the Pl011 UART for debugging purposes,
+and VirtIO models for console and network too.
+
+CPU model
+---------
+
+The virtual CPU comprises an entrypoint, the CPU local part of the interrupt
+controller, a Generic Timer model, and all system registers that are not
+accessed by the guest OS directly. For instances, the access to identity, or
+debug registers is limited, and therefore needs to be emulated.
+
+The entrypoints of the CPUs are the only execution contexts within the VMM.
+Whenever an asynchronous event wakes up such an entrypoint, it first makes sure
+that the corresponding virtual CPU gets not executed anymore, it then handles
+the last potential exception of the VM exit, and then executes the signal
+handler corresponding to the wakeup-event. Finally, it checks whether the
+virtual CPU is runnable again and in that case informs the kernel's scheduler
+via the VM session interface.
+
+Asynchronous events can either be a VM exit, or a signal of some device model's
+backend like a Terminal receiving new characters, or a new network packet.
+
+Let's have a look at some concrete example. For instance when a guest OS is
+executing a wait-for-interrupt instruction, an exception to the hypervisor gets
+propagated. The hypervisor saves the current CPU state to some dataspace shared
+in between VMM and core that represents the virtual CPU. It removes the VM's CPU
+context from the scheduler and sends a signal to the VMM's entrypoint associated
+with that CPU. The entrypoint wakes up, analyzes the VM exit, will setup an
+alarm according to the timer state of the virtual CPU, and then will wait for
+new events without re-scheduling the VM's virtual CPU, because it should not run
+when waiting for interrupts. Either after the timer alarm, or some other backend
+event triggers, a virtual interrupt will get injected via the GIC, and the
+virtual CPU is runnable again.
+
+Pass-through devices
+--------------------
+
+Beside the already mentioned device models, the VMM contains an abstraction
+called "Hw_device" that can be used to pass-through a physical peripheral into a
+VM. It is a template which comprises a fixed amount of physical interrupts, and
+memory-mapped I/O dataspaces. It eases the declaration of I/O resources that
+shall be used by a VM exclusively. For example, the following code:
+
+! Hw_device<2, 1> ethernet;
+! ...
+!
+! ethernet.irqs(120, 121);
+! ethernet.mmio(0xd0000000, 0x4000);
+
+declares a peripheral with two interrupts 120 and 121, and a memory-mapped I/O
+region from 0xd0000000 to 0xd0004000. The corresponding I/O memory dataspace
+gets automatically requested, and attached to the guest physical memory. All
+interrupts of the device will get injected one-by-one to the virtual CPU that is
+assigned to the peripheral.
+
+Given this abstraction it is easy to pass a bunch of I/O resources to a VM.
