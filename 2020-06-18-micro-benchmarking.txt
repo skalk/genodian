@@ -1,0 +1,150 @@
+             Micro benchmarks - what can possibly go wrong
+
+From time to time I need to compare execution times and memory throughput in
+between Genode's hw-kernel and the baseline (typically using Linux) regarding
+one of the hardware platforms supported by Genode. Mostly this is done when the
+hw-kernel is ported to new hardware, or we experience unusual workloads on a
+platform, like recently when investigating a non-working USB driver on
+Raspberry Pi 1.
+
+Before diving into implementation details of the complex driver,
+I first liked to exclude that the hw-kernel initializes hardware
+inappropriatedly, which is why the driver would not have enough CPU time or
+experience too high latencies.
+
+In the past I have used a simple bogomips routine from time-to-time, which could
+be executed on top of Linux and Genode:
+
+! void bogomips() __attribute__((optimize("O0")));
+!
+! void bogomips()
+! {
+!     for (register unsigned i = 0; i < 1000000000; i++) { ; }
+! };
+
+
+When observing more-or-less the same run-time on both systems while executing
+the loop, I was confident that at least the CPU runs with the same frequency, and
+there are no big configuration issues regarding the CPU. Of course I was lazy
+and presumed that the Linux kernel developers have configured the hardware
+correctly, and the compiler would produce instructions that do not touch memory
+within the loop. Otherwise I would measure memory access latency instead of
+cpu execution times. When initially writing and compiling above simple
+loop, of course I've checked the resulting binary, and looked at the
+dissassembled code for different architectures, and it produced the assumed
+outcome. Which means the exit-condition value got transfered into one register,
+and another zero-initialized register got incremented until it reached the value of
+the first one.
+
+Now, when recycling this approach with a more recent toolchain of Genode for
+testing the Raspberry Pi 1, I could observe that the compiler produced the
+following code:
+
+! 01000084 <_Z8bogomipsv>:
+!  1000084:       e92d0810        push    {r4, fp}
+!  1000088:       e28db004        add     fp, sp, #4
+!  100008c:       e3a04000        mov     r4, #0
+!  1000090:       e59f301c        ldr     r3, [pc, #28]   ; 10000b4 <_Z8bogomipsv+0x30>
+!  1000094:       e1540003        cmp     r4, r3
+!  1000098:       8a000001        bhi     10000a4 <_Z8bogomipsv+0x20>
+!  100009c:       e2844001        add     r4, r4, #1
+!  10000a0:       eafffffa        b       1000090 <_Z8bogomipsv+0xc>
+!  10000a4:       e320f000        nop     {0}
+!  10000a8:       e24bd004        sub     sp, fp, #4
+!  10000ac:       e8bd0810        pop     {r4, fp}
+!  10000b0:       e12fff1e        bx      lr
+!  10000b4:       3b9ac9ff        .word   0x3b9ac9ff
+
+As one can see, the exit-condition value stored at address 0x10000b4 is loaded
+during every loop cycle, which would rather measure memory access times.
+
+Therefore, I had to bite the bullet and provide an assembler routine per
+architecture instead of using a high-level language function for measuring.
+I wrote something like this:
+
+! .global bogomips
+! bogomips:
+! push { r4 }
+! mov r4, #0
+! 1:
+! cmp r4, r0
+! addne r4, r4, #1
+! nop
+! bne 1b
+! 2:
+! pop  { r4 }
+! mov pc, lr
+
+When called like this:
+
+! bogomips(2500000000)
+
+the routine executes 10 billion instructions including a branch every forth one.
+
+When executing the same routine on Linux and Genode, I could measure that Genode
+needed twice as long as Linux to execute the same loop ~30 seconds.
+
+After a short review round through the platform initialization code, I quickly found
+that the branch predictor on this specific CPU was never enabled since the
+Raspberry Pi 1 support entered Genode. Lucky about my finding, I was sure we
+will now behave exactly like Linux, but instead I measure we were still much
+slower.
+
+Ok, my first thinking was: probably the Linux kernel changes the clock speed of
+the CPU. But after rounds of investigating and instrumenting the Linux kernel, I
+could not find something related. On this platform, you have to call the
+firmware running on the GPU to change CPU clock rate. But the Linux driver
+calling the firmware on the GPU side was not called to change it. All my
+attempts to raise the clock speed in Genode dynamically failed, until I learned
+that you have to configure the maximum and minimum clock speed values at load
+time in the firmware to be able to change it at run-time.
+Anyway, the clock speed was the same in Linux and Genode, and that excursion was
+a dead-end.
+
+To find the point when Linux is toggling the right switch, I moved that
+"bogomips" loop at the very beginging of the Linux kernel, and behold: it was as
+slow as under Genode!
+
+I moved it step-by-step to the end of the kernel
+initialization, but it kept slow. When executing the same assembler loop in a
+normal Linux user programm it took a bit more than 13 seconds, but whereever I
+executed it in the kernel it took a bit more than 17 seconds - the same time I
+measured under Genode. Even when I put that routine into a kernel module and
+loaded that dynamically it kept slower.
+
+Therefore, I intensively studied how the Linux kernel uses page-table attributes
+for different memory areas. I thought they might use the ARM TEX remap approach
+on this platform (nope), or have other differentiation attributes. While doing
+so, I learned that Linux uses even different memory domains for IO, KERN, and
+USER on this platform, something somehow compareable to segmentation on x86.
+However, whatever I did with the paging attributes under Genode it kept as slow
+as before. Only after I desperately turned the paging into ARMv5 compatibility
+format - effectlively turning off some of the access permission flags - it
+became faster. This was unexpected to me. The loop above fits perfectly into the
+instruction cache - no need to fetch it again from memory. I also executed it
+inside the kernel with disabled interrupts. It never got interrupted. But
+nonetheless, when turning off certain permission bits relevant to MMU and TLB
+usage by using the ARMv5 page-table format the whole loop became about 3 seconds
+faster. Here the impact of the whole mostly invisible, speculative execution
+complex became apparent.
+
+Finally, I threw away all my experiments (of course I kept the enabled branch
+predictor ;-)), and had a second look at the compilation of the Linux userland
+program and the Genode component. Of course, the assembler routine was
+identically, but ... you might guess it already ... uh no, it was linked to
+differently aligned addresses. On Genode it was word-aligned like it needs to be
+on ARM. But on Linux the routine was 256-byte aligned. When moving the Linux
+routine artificially by adding some "nop" instructions at the beginning of the
+routine, it became as slow as on Genode.
+
+I was thumping the table with my head, and realized: micro-benchmarking for adults
+only!
+
+BTW.: probably this happened because I used two different compilers (yes
+Sebastian you are right, never do this when benchmarking!), because I had no
+Genode toolchain available for ARM Linux, but used the gcc from the Raspbian
+package. I thought it does not matter, because the 10G instructions I measure
+are written by hand in assembler. Anyway, even when using the same compiler due
+to the different environment the assembler routine is linked to, you have to
+define the alignment explicitely. Otherwise, you might compare completely
+different hardware code-pathes inside of the blackbox mystery called modern CPU.
