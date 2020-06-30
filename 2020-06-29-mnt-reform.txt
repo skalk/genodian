@@ -1,0 +1,113 @@
+                  MNT Reform 2 - First Steps
+
+
+Recently, I was honored for receiving the first beta
+[https://www.crowdsupply.com/mnt/reform - MNT Reform 2.0]
+shipped by [https://mntre.com - MNT Research GmbH]. This is an interesting
+laptop project produced by a team of three people: Lukas Hartmann
+(electronics / software design), Ana Beatriz Albertini Dantas (product /
+industrial design), and Greta Melnik (sleeve design / SMD assembly). The
+curiosity about it is that such a small team has designed a customizable,
+completely-open, robust-and-sustainable, and last but not least fancy device for
+privacy-aware and hacker-minded people. It contains a self-designed motherboard
+accomodating a Nitrogen8M System-on-Module with an i.MX8MQ System-on-Chip
+inside, its own mechanical keyboard, as well as either a trackball or trackpad.
+Everything inside is open hardware. You can download all PCB schematics. Moreover,
+the MNT Reform arrived in a box containing colored printings of the schematics
+as well. If you are interested you can enjoy a series of
+[https://twitter.com/Skalk12/status/1270443745654321152 - unboxing pictures].
+
+The only limitation regarding the openness is naturally the Integrated-Circuits
+including the SoC. But here the technical lead Lukas Hartmann has chosen to use
+the NXP's i.MX8MQ as a good choice regarding open documentation, unlocked
+boot-chain and most absence of firmware blobs. Due to this choice I got aware of
+this highly interesting project. For the very same reasons, we made use of the
+i.MX SoC series at Genode Labs in the past. And after looking deeper at MNT
+Reform, it became obvious to me that we share a common mindset at MNT Research
+and Genode Labs: giving back control to the users.
+
+To cut a long story short: I was really excited when the MNT Reform arrived. And
+all my expectations were surpassed when opening the package. First of all,
+the transparent, professional communication policy by MNT Research GmbH is a
+pleasure.
+The box not only included the laptop and schematics, but a detailed letter with
+all starting information and further references. It felt like doing a time
+travel. When my father handed his old (1980) HiFi system to me, it included a thick
+handbook with all schematics back then as well. Devices as such are constructed
+to survive decades.
+
+Obviously planned for the near future is the Reform Operator's Handbook. But for
+the time-being I was lucky to scroll and click through the
+[https://mntre.com/reform2-handbook/system.html - interactive system diagram]
+with links to the relevant Linux drivers and datasheets. I've already
+experienced how frustrating it can be to figure out what innards boards and SoCs
+might contain during the last years. The MNT Reform 2 is a nice contrast here.
+
+First I failed to turn-on the device, but after reading the annexed letter more
+carefully, I realized that it's simply the Circle-key in combination with '1' or '0'
+to turn the device on and off. Actually quite plausible. It is easy to recap
+that interactions with the system controller's firmware are always done via the
+Circle key, whereas the MNT Reform key is used to interact with the OS (or
+better the window-manager). When playing a bit with the Linux distro preinstalled on
+the SD-card, I really enjoyed to use the keyboard! The trackball is still a
+bit harsh when used, but I assume it will run more smoothly when enwrapped with
+my hands patina.
+
+But being a Genodian my goal was not only to consume the device as it is, but
+making it my primary Genode platform. So it was time to unscrew the acrylic
+glass bottom side, and connect a serial to USB converter in between the serial
+pins of the Reform and my current development machine.
+
+[image reform-01]
+
+By interacting with the pre-installed u-boot, I could successfully load a first
+very simple "Hello World" alike Genode system image into the Reform's memory via
+network. Therefore, I simply used an image built originally for the i.MX 8MQ
+Evaluation Kit, which uses the very same SoC. Typically, at Genode Labs we use
+the uImage format and u-boot's 'bootm' command to load our system images. The
+first attempt to boot that image failed, because the preinstalled u-boot
+insisted on a device-tree blob to be provided as well. But then it successfully
+booted and showed Genode's hw kernel/core, init and test-log component running
+on the Reform.
+
+The next step was changing the frequency of the CPUs when starting the kernel.
+When booted, the CPU runs with 1 GHz frequency, but it is actually capable to
+run with 1.5 GHz. I first figured out how to do this with the i.MX 8MQ EVK,
+because it is already integrated well into our testing infrastructure. It took
+quite some time to figure out how the actual protocol of bit-twiddling in the
+PLLs looks like, but finally it run reasonable faster, and I could one-by-one
+adapt the changes to the MNT Reform.
+
+The first midterm goal is to run an interactive Sculpt OS on the Reform, similar
+to the one already presented on the i.MX 8MQ EVK at
+[https://fosdem.org/2020/schedule/event/uk_genode_armv8/ - FOSDEM] earlier this
+year. Therefore, a bunch of drivers for networking, persistence storage, and
+human interaction are needed in the first place. The hope was that most drivers
+used already with the i.MX 8MQ EVK could be used unmodified to achieve this.
+Indeed, the drivers for SD-Card and Ethernet went out-of-the box. The USB host
+controller driver was functional too. But in contrast to the EVK, which uses
+only one USB host controller of the i.MX 8MQ SoC, the Reform 2 uses both
+available ones. An USB hub connected to the second one attaches the trackball
+and keyboard USB HID devices. After tweaking the driver a bit, which still uses
+hard-coded I/O resources instead of the new platform driver for ARM, I could
+successfully see input events from trackball, keyboard, and an attached mouse,
+as you can see in the below picture.
+
+[image reform-05]
+
+The last missing point is the display panel. There is already a Linux
+driver port for the Display Controller Subsystem (DCSS) - the display engine of
+the SoC - available in Genode. However, until now we only used and enabled the
+HDMI connectivity for it. But the display panel of the Reform is connected
+via a Mobile Industry Processor Interface (MIPI) Display Serial Interface (DSI).
+So it won't work without additional device driver integration. Fortunately, my
+colleague Sebastian Sumpf already begun to port the missing MIPI-DSI piece to
+run an OLED diplay connected to the EVK board. As soon as he finished his work,
+I'll gladly integrate it into my MNT Reform 2
+[https://github.com/skalk/genode/commits/mnt_reform2 - topic branch]. Then a
+first Sculpt OS version should be available.
+
+The next bigger issue I currently focus on is writing an i.MX 8MQ specific
+platform driver comprising clock & power management and to turn the drivers into
+using it. Moreover, it shall manage the PCI-x bus available, which is quite
+important to enable NVMe, or Wifi on the MNT Reform 2.
