@@ -6,8 +6,9 @@ Recently, I was honored for receiving the first beta
 shipped by [https://mntre.com - MNT Research GmbH]. This is an interesting
 laptop project produced by a team of three people: Lukas Hartmann
 (electronics / software design), Ana Beatriz Albertini Dantas (product /
-industrial design), and Greta Melnik (sleeve design / SMD assembly). The
-curiosity about it is that such a small team has designed a customizable,
+industrial design), and Greta Melnik (sleeve design / SMD assembly).
+
+The curiosity about it is that such a small team has designed a customizable,
 completely-open, robust-and-sustainable, and last but not least fancy device for
 privacy-aware and hacker-minded people. It contains a self-designed motherboard
 accomodating a Nitrogen8M System-on-Module with an i.MX8MQ System-on-Chip
