@@ -1,0 +1,97 @@
+               Genode development container
+
+In the past, the question was asked several times: why doesn't Genode provide a
+development container, e.g., a docker image. The question was raised by some
+community members, as well as people interested in giving Genode a try. They did
+not want to install an additional compiler toolchain and a bunch of tools
+and thereby pollute their daily working environment.
+
+Well, the easy answer is: the developers at Genode Labs first and foremost
+develop components for the Genode OS framework. Therefore, the've installed all
+necessary tools in their working environment anyway. On the other hand nobody of
+us has made experiences in using the different container tools, as we primarily
+use Genode now, and at most different Linux VMs for different purposes on top.
+Last but not least, nobody was keen to take over maintainance of yet another
+tool.
+
+Anyway, recently the need forced up to upgrade the quite outdated (Ubuntu 16.04)
+buildbot, which is used to build and test all components and automated
+run-scripts at Genode Labs. For me this was the time to put all needed
+credentials into a docker image recipe. Therewith, I hope the effort for
+everybody else gets lowered to setup a new Genode build environment, or just to
+give the Genode OS framework a first try.
+
+To profit from the existent image you need a minimal Linux runtime environment,
+either inside a freshly installed VM running on top of Genode, Windows, Mac,
+etc., or you use a native Linux installation. It is recommended to use a more or
+less recent Linux kernel (>= 4.9 works for me). The only requirement is the
+installation of the docker daemon and utilities. Most distributions deliver
+docker packages, or you install it directly from the
+[https://docs.docker.com/get-docker/ - docker website].
+
+The pre-built docker image that contains a minimal Ubuntu 20.04 installation and
+all tools needed to build Genode and all of its supported 3rd party software is
+located at:
+
+[https://genode.org/files/genode-docker-20.04-image.tar]
+
+Its SHA1 hashsum is:
+
+! a29428f8a76c87b18f5aea33b14daf2a21a90f1e genode-docker-20.04-image.tar
+
+For convenience reasons, and for all those who are not familiar with using
+docker to be used as a starting point, I've create a small wrapper tool,
+simply called _docker_. It comprises the steps to download and import the
+Genode development image, as well as to start a development container. At the
+same location you will find the recipe to build the very same docker image on
+your own. Just checkout the following repository:
+
+! git clone https://github.com/skalk/genode-devel-docker.git
+
+Inside the repository you will find the file _Dockerfile_, which is the recipe
+to build the Genode development docker image from scratch. This can take quite
+some time dependent on the machine you are using.
+
+If you are fine with using the pre-built image provided by Genode Labs, you can
+simply use the _docker_ tool inside the repository like the following:
+
+! ./docker import [SUDO=sudo]
+
+If you are able to use the docker tools without root privileges (which is
+recommended, but goes behind this article), you can leave out the _SUDO_
+variable.
+
+When the download, hashsum checking and import of the docker image was
+successful, you can run a new container instance. It will use your user identity
+and mount your home directory inside the new container:
+
+! ./docker run [SUDO=sudo]
+
+When exiting the running shell in the development container, it gets destructed
+automatically.
+
+If you like to install some additional tools, like your favorite editor, into
+the existing docker image, and make the changes persistent, you can do so by
+running it like this:
+
+! ./docker admin [SUDO=sudo]
+
+In case you do not want to import the pre-built image, but want to build the
+docker image from scratch, you can do so with the command:
+
+! ./docker build [SUDO=sudo] [MAKE_JOBS=32]
+
+The _MAKE_JOBS_ variable again is optional and is delegated into the container
+build process to denote how many make steps can be done in parallel. The
+default value is 4. It is used when building the Genode GCC compiler toolchain,
+Qemu, and the RiscV emulator Spike.
+
+To remove the Genode development container image again you can simply do:
+
+! ./docker clean [SUDO=sudo]
+
+Even, if you are not willing to use docker in the future, you might profit from
+the new [https://github.com/skalk/genode-devel-docker/blob/master/Dockerfile - recipe],
+because it summarizes all dependencies of the Genode build system, run tool +
+plugins, and all the dependencies of third party software like QT5, sel4,
+Muen, Fiasco.OC, etc..
