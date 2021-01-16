@@ -1,0 +1,117 @@
+                           Mobile Tech Demo
+
+Recently, a bunch of posts on this blog platform circled around Genode seriously
+entering the mobile world. Be it the enabling of a
+[http://genodians.org/ssumpf/2020-09-30-mipi_touch - touchscreen],
+[http://genodians.org/ssumpf/2020-12-04-mbim - LTE modem] support, or the first
+steps to bring Genode to the
+[http://genodians.org/nfeske/2020-12-10-pine-fun-warmup - Pinephone]. But a
+mobile platform doesn't have different technical requirements only, like
+support for certain peripherals. It varies in the way people are interacting with
+it, which needs to be considered in its GUI. To experiment in this direction a
+bit on the one hand, and to integrate several of the recent new components
+available in Genode in a sound prototype was the motivation behind the tech demo
+that is described in the following.
+
+You can get a first impression about it by watching this
+[https://youtu.be/HSMmfSn7iq8 - video].
+
+The technical foundation of the demo is the NXP i.MX 8M Quad Evaluation Kit
+board connected via DSI to the touchscreen that is promoted by NXP for the same
+device. The starting point for this demo is Sculpt OS, which was made functional
+for this platform as part of Genode's last
+[https://genode.org/news/genode-os-framework-release-20.11 - release 20.11].
+The idea was to take Sculpt OS as it is, install some additional packages,
+tweak a bit the running configuration, make it persistent, and it's done!
+
+The considered graphical surface consists of a panel component at the bottom,
+which enables the user to switch in between two statically running applications.
+The main application is
+[http://genodians.org/alex-ab/2020-07-02-scrcpy - Scrcpy]. It can display and
+control a remote Android instance connected via network. Imagine a fleet of
+Android instances of a business cooperation, or public agencies, centrally
+controlled in a server farm as possible operation purpose.
+To access the WiFi network in public areas, like trains, cafes, or hotels,
+you often need to confirm terms and conditions, or provide additional
+credentials via a web browser. Therefore, the additional application beside
+Scrcpy is the Falkon web browser. It serves as prerequisite to further connect
+Scrcpy to its Android target in such public WiFi environments.
+Both applications were already available, and due to my hard-working colleagues
+Alexander Boettcher and Christian Prochaska, I could easily use them inside
+Sculpt, because they each provided a depot package to me. Therewith, I could
+simply use the means of the Sculpt OS' Leitzentrale to install and instantiate
+an instance of Scrcpy, and the Falkon Browser.
+
+Anyway the missing pieces were the panel, a virtual on-screen keyboard to
+interact with the web browser while having a touchscreen only, and the management
+component that orchestrates panel, keyboard and application usage. For the last
+one, it was certain that the existent window management conglomerate of wm,
+window decorator and layouter will be re-used as far as possible. The window
+manager, or wm in short, is a policy free component that could be used as it is.
+The themed window decorator could be used unmodified as well. Because it is
+configurable thus far that the applications windows are shown without any title
+bar and decorations. Moreover, it even provides motion effects to slightly
+animate window movement, useful to visualize the appearing and disappearing of
+the keyboard.
+The third component - the window layouter is responsible
+for the size and placement of the windows. It is in its current form also highly
+configureable. But as the scenario needs a quite simple, almost static window
+layout only, I decided to replace the existing window layouter with a
+context-specific "mobile shell" component.
+
+The mobile shell consumes a button state XML report from the panel to decide,
+which application should be visible right now, and whether the virtual keyboard
+is shown at the bottom half of the screen, or not. It produces a corresponding
+window layout report for the decorator, and resizing requests and focus changes to
+the wm. It is quite simple and comprises about 350 lines of code.
+
+To realize the on-screen keyboard, my colleaque Christian Prochaska helped me out
+by enabling an existent [https://doc.qt.io/qt-5/qmlapplications.html - QT5 QML]
+based virtual keyboard. He also packaged the
+additionally needed QT5 libraries to be used in Sculpt. Although, QT5 is a quite
+heavy sledgehammer to realize some simple graphical widgets, it provides a whole
+cosmos of applications. Moreover, The Falkon Browser is based on QT5 as well.
+That means most QT5 libraries have to be loaded from disk respectively SD-card
+anyway. But I don't want to conceal that currently the loading of all needed QT5
+libraries from SD-card on the i.MX 8M Quad EVK tooks quite some time, and
+additional optimizations are absolutely necessary to use it as productive
+system.
+
+With the QT5 web browser and QML keyboard already in place, I decided to
+experiment the first time with QML as well, by realizing the panel with it.
+The first idea was to have a QML-only application in Genode, and to integrate it by
+mounting all necessary resources into its Virtual Filesystem (VFS). Thereby, it
+could interact with the rest of the system.
+Practically, the plan was to use QML mechanisms to provide the panel with two
+exclusively useable buttons for either Scrcpy or web browser, and a tooglable
+button for the keyboard, and write the state of all three buttons whenever it
+changes into a file, which then gets consumed by the mobile shell.
+
+As it turned out there is no pre-defined way to do file I/O in QML. There is a
+possibility to make configuration settings persistent at some defined filesystem
+location, or to access a SQL database, but file I/O in general isn't provided.
+Therefore, some additional code had to be written in C++ to enable the QML panel
+to write to a file. Anyway, the whole C++ code for the application are 45 lines
+of code, and can be re-used by other applications as well to access arbitrary
+files.
+
+[image sculpt_leitzentrale_mobile]
+  Sculpt OS Leitzentrale with mobile shell in background
+
+After all components were finally ready, they could get integrated by using the Sculpt
+OS Leitzentrale and "clicking" all components together. I have to admit that
+using the touchscreen to use the Leitzentrale, or Sculpt OS GUI is still no
+pleasure. The reason is that we do not distinguish touch events from mouse
+button clicks. Therefore, they are propagated like button clicks and releases,
+which can lead to undesired effects like accidentally activating GUI elements
+that were activated at latest. On the other side, these are exactly the
+findings, a prototype scenario like this one should make possible.
+
+Final tweaks were to delete the pointer domain in the configuration of
+the GUI server, which made the mouse pointer invisible. Finally the saving of
+all changed configurations including the runtime to SD-card, made the scenario
+persistent. Thereby, it is loaded automatically as soon as the SD-card is getting used.
+
+The whole demo is work-in-progress, and therefore all software is available
+as a [https://github.com/skalk/genode/tree/mobile_shell - topic-branch] only,
+and not necessarily part of the official Genode repositories.
