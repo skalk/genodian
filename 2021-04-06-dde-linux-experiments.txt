@@ -1,0 +1,215 @@
+              Linux device driver ports - Breaking new ground
+
+In my following blog post(s) I want to elaborate on recent attemtps to renew and
+enhance the way Linux device drivers are ported to Genode. This is highly
+experimental work. So be warned if you try to follow the same approach: it
+hasn't proved its worth yet. But first let me explain why to break new grounds
+at all.
+
+Cutting device drivers out of the Linux kernel project has a long history in
+Genode's development. The reasons for doing so are simple. Today almost all vendors
+provide Linux drivers for their devices due to the huge market share of Linux
+in the server, mobile, and embedded markets. The Linux kernel code is publicly
+available under the GPLv2 in contrast to most commercial alternatives. And last
+but not least, documentation for a lot of devices and systems is poor or not
+even available. That is why the open-source code of the Linux kernel is often
+the single reference for the functioning of the device.
+
+Re-using the Linux kernel's device driver code is mostly an economical decision.
+Writing all device drivers from scratch means to understand the whole inner
+working of potentially highly complex devices. You have to test extensively to
+discover rare cases of hardware malfunctions, and find quirks to circumvent
+them. There are hundreds of device drivers that build the lion's part of the
+millions lines of Linux kernel code. They were written and are maintained by
+thousands of people often employers of the hardware vendors themself.
+On the other side, when extracting the "black-box" of a specific Linux device
+driver into a dedicated Genode component with a narrow interface, we gain the
+whole experience of the driver-developers without loosing isolation properties,
+and are able to restart the driver in case of a malfunction. So isn't this the
+holy rail?
+
+Well, of course taking the driver out of the Linux kernel and transplanting them
+into a Genode component has a catch. You have to deal with the whole complexity of
+the Linux kernel and tons of boilerplate code needed to stick everything
+together, and to provide the high degree of flexibility Linux has. But we don't
+necessarily need most of this glue and its flexibility, because we only want
+some single pieces. Anyway you have to comprehend a lot of Linux kernel code to
+know where to make the cut.
+
+Over the time we learned and adapted the way how to take Linux kernel
+parts over at best. It started with the earliest Genode version available, which
+already contained the so called
+[https://genode.org/documentation/release-notes/8.11#Device-driver_framework_for_C_device_drivers - DDE Kit].
+Whereby DDE in general stands for Device Driver Environment. It consisted of an
+OS-independent DDE kit and a Linux-specific library that was common to all Linux
+device drivers and tied to a specific kernel version. While dealing with
+increasingly complex drivers like the former madwifi stack for Atheros chipsets,
+the limitations of this approach became obvious. Certain complex driver stacks
+needed emulation code not necessarily useful for others.  The DDE Linux library
+became more and more complex. Moreover, the constraint of providing a library
+for a fixed Linux kernel version does not work in a more-and-more fragmented
+vendor fork landscape. The DDE kit approach got reconsidered first while porting
+the [https://genode.org/documentation/release-notes/10.08#Graphics_execution_manager - Intel Graphics Execution Manager].
+Here, a target-specific DDE was build instead. That means, necessary compilation
+units were identified, and for each header file referenced by it, a symbolic
+link got created that refered to one central emulation code header. In the
+process of porting all missing declarations of datatypes, variables, and
+functions had to be filled manually. The advantage was that you could simplify
+the datastructures to a minimum needed by the driver code.  The downside was
+that it could keep you busy some days to fill the necessary declarations, not to
+speak about the definitions. Anyway, for a long time this approach brought
+successful results for porting a wide range of different x86 and ARM drivers to
+Genode. The introduction of the
+[https://genode.org/documentation/release-notes/16.05#Linux_kit - Linux kit], a
+tiny, but universal backend for the driver-specific DDEs, lowered the costs for
+new drivers a bit.
+
+Recently, the long-term approved approach of having a manually tailored,
+driver-specific DDE came to its limit. The costs for doing a new port are
+ranging in between 1-3 person-months depending on the complexity of the
+subsystem. The half-life of a port on the other hand is limited, because the
+Linux kernel still is a rapidly moving target, at least in its driver
+subsystems. That means when you have to update a ported driver to a much newer
+Linux kernel version, you often start from the very beginning. Due to
+the comparatively high costs one automatically tries to keep the old code-base
+as long as possible.  Moreover, during the actual update, the impulse to keep
+the former code-base and trying to adapt it to work seems likely, even if that
+means to keep some dead code. Last but not least the manually-tailored approach
+caused a fragmented landscape of Linux kernel functions inside the different
+DDEs, which were either copies of each other, or which differantiated in minor
+details. This obviously complicates maintainance and bug-fixing across different
+drivers.
+
+Therefore, when rethinking the way how to port Linux drivers to Genode the
+following premises were made:
+
+* Lower the manual work for tailoring the driver-specific DDE
+* Consolidate commonly used emulation parts
+* Try to fit as close as possible the original semantic
+
+The last premise was made due to the observation that people lost most time during
+porting work in finding the semantic gaps in between original Linux code and the
+emulation code.
+
+First practical steps
+---------------------
+
+Well, enough motivation talk for now. Let's directly step into the re-newed
+approach!
+
+The very first step is to download and prepare the Linux kernel
+version that is targeted. In my case I used the slightly patched vanilla Linux
+kernel 5.7.0 for the MNT Reform2 as found in the
+[https://source.mnt.re/reform/reform-system-image/-/tree/bc5bd778fa751a04121a32d68e946681383407d6/reform2-imx8mq - reform-system-image repository].
+The source code location, patches and configuration are referenced in the
+'mkkernel.sh' helper script. At first the kernel gets configured and compiled as
+it is. Thereby, its configuration files and some headers get generated.
+Moreover, you get an executable kernel that serves as reference to determine the
+correct runtime behaviour later if debugging is necessary.
+
+But before building the kernel, you've
+to tweak its configuration slightly. To not compile relevant parts as modules,
+but compile everything as being part of the kernel binary itself, it is necessary to
+deselect 'CONFIG_MODULES' in the kernel configuration. Moreover, at least when
+compiled for the ARM 64-bit architecture, please deselect 'CONFIG_JUMP_LABEL'.
+This is an optimization option only, which leads to the usage of 'asm goto' inline
+assembler directives. These directives are incompatible when being compiled as
+position-independent (PIC) code. But we have to compile the Linux kernel
+compilation units as PIC code to be used in Genode. After finishing the
+configuration tweaks just build the Linux kernel inside the source tree like the
+following:
+
+! make ARCH=arm64 CROSS_COMPILE=/usr/local/genode/tool/current/bin/genode-aarch64- Image
+
+One of the main ideas for the new approach was to re-use all Linux kernel
+headers as they are. Thereby we strongly lower the manual work to provide
+definitions for functions, macros, structs and variables on the one hand.
+A manual work that cost some days not only hours! On the other hand, we follow
+the goal to keep the original semantic as close as possible by re-using the
+original headers.
+
+No sooner said than done. I inspected the main 'Makefile' in the Linux kernel
+tree, and identified the include path order, as well as its compiler warning
+directives, and some additional compiler flag defines. Everything was put into
+a new driver 'target.mk' Makefile:
+
+! TARGET    = imx8mq_fb_drv
+! REQUIRES  = arm_v8a
+! LIBS      = base
+!
+! CONTRIB_DIR = $(HOME)/src/linux-7f785aec84b4be2960e4ef7f91a385ba68cad77
+!
+! INC_DIR   = $(CONTRIB_DIR)/arch/arm64/include
+! INC_DIR  += $(CONTRIB_DIR)/arch/arm64/include/generated
+! INC_DIR  += $(CONTRIB_DIR)/include
+! INC_DIR  += $(CONTRIB_DIR)/arch/arm64/include/uapi
+! INC_DIR  += $(CONTRIB_DIR)/arch/arm64/include/generated/uapi
+! INC_DIR  += $(CONTRIB_DIR)/include/uapi
+! INC_DIR  += $(CONTRIB_DIR)/include/generated/uapi
+! INC_DIR  += $(CONTRIB_DIR)/scripts/dtc/libfdt
+!
+! CC_C_OPT += -std=gnu89 -include $(CONTRIB_DIR)/include/linux/kconfig.h
+! CC_C_OPT += -include $(CONTRIB_DIR)/include/linux/compiler_types.h
+! CC_C_OPT += -D__KERNEL__ -DCONFIG_CC_HAS_K_CONSTRAINT=1
+! CC_C_OPT += -DKASAN_SHADOW_SCALE_SHIFT=3
+! CC_C_OPT += -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs
+! CC_C_OPT += -Werror=implicit-function-declaration -Werror=implicit-int
+! CC_C_OPT += -Wno-format-security -Wno-psabi
+! CC_C_OPT += -Wno-frame-address -Wno-format-truncation -Wno-format-overflow
+! CC_C_OPT += -Wframe-larger-than=2048 -Wno-unused-but-set-variable -Wimplicit-fallthrough
+! CC_C_OPT += -Wno-unused-const-variable -Wdeclaration-after-statement -Wvla
+! CC_C_OPT += -Wno-pointer-sign -Wno-stringop-truncation -Wno-array-bounds -Wno-stringop-overflow
+! CC_C_OPT += -Wno-restrict -Wno-maybe-uninitialized -Werror=date-time
+! CC_C_OPT += -Werror=incompatible-pointer-types -Werror=designated-init
+! CC_C_OPT += -Wno-packed-not-aligned--
+
+Pro-tip: if you use another Linux kernel version or another target architecture,
+just inspect some random '.*.o.cmd' file in your Linux kernel build tree. Each
+compilation unit leaves a corresponding '.cmd' file that includes the complete
+compiler invocation with all flags and the dependencies of the file.
+
+To test it, I've put all compilation units that were built in my reference
+kernel for the i.MX specific DRM subsystem into the new 'target.mk' file:
+
+! LX_OBJECTS  = $(wildcard $(CONTRIB_DIR)/drivers/gpu/drm/imx/*.o)
+! LX_OBJECTS += $(wildcard $(CONTRIB_DIR)/drivers/gpu/drm/imx/dcss/*.o)
+! LX_REL_OBJ  = $(LX_OBJECTS:$(CONTRIB_DIR)/%=%)
+! SRC_C      += $(LX_REL_OBJ:%.o=%.c))
+!
+! vpath %.c  $(CONTRIB_DIR)
+
+And tried to build the new component. Most objects got compiled without
+grumbling, but few compilation units hesitated to compile because of a missing
+definition named 'KBUILD_MODNAME'. Inside the Makefiles
+distributed in the subdirectories of the Linux kernel, there are definitions
+that assign compilation units to kernel modules. On the other hand those module
+names are given as global defines to the compiler, like for instance:
+
+! -DKBUILD_MODFILE='"drivers/gpu/drm/imx/dcss/imx-dcss"' -DKBUILD_BASENAME='"dcss_drv"' -DKBUILD_MODNAME='"imx_dcss"'
+
+Assuming that it is not necessarily relevant to provide the exact module
+name, but an indistinguishable name only, I decided to use the compilation
+unit's name itself as module name, and to provide the missing defines to all
+compilation units. Therefore I added the following directives to my 'target.mk'
+file:
+
+! define CC_OPT_LX_RULES =
+! CC_OPT_$(1) = -DKBUILD_MODFILE='"$(1)"' -DKBUILD_BASENAME='"$(notdir $(1))"'
+! -DKBUILD_MODNAME='"$(notdir $(1))"'
+! endef
+!
+! $(foreach file,$(LX_REL_OBJ),$(eval $(call CC_OPT_LX_RULES,$(file:%.o=%))))
+
+I know it doesn't look nice, but with this little make magic in place, I was
+successful in compiling and linking all Linux kernel compilation units together
+that I liked without any error nor warning. I was overwhelmed in a positive way,
+because these few steps worked after few hours only, even faster than I expected
+before.
+
+You might wonder why I did not see any "missing references" errors from the
+linker, but as I didn't called any Linux kernel code, the linker just throwed
+away everthing that was not needed.
+
+The next step was to call the right initialization routines in the kernel code,
+and to track and automatically generate missing references. But this is another
+story that will be part of a later blog post.
