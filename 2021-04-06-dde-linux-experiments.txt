@@ -26,7 +26,7 @@ On the other side, when extracting the "black-box" of a specific Linux device
 driver into a dedicated Genode component with a narrow interface, we gain the
 whole experience of the driver-developers without loosing isolation properties,
 and are able to restart the driver in case of a malfunction. So isn't this the
-holy rail?
+holy grail?
 
 Well, of course taking the driver out of the Linux kernel and transplanting them
 into a Genode component has a catch. You have to deal with the whole complexity of
