@@ -1,0 +1,243 @@
+        Linux device driver ports - Generate dummy function definitions
+
+In my [https://genodians.org/skalk/2021-04-06-dde-linux-experiments - last blog post]
+I've described the motivation to break new grounds in porting Linux
+drivers to Genode. Moreover, you've seen how to re-use the headers and
+configuration of a pre-built Linux kernel. This time we'll continue by invoking
+the very first initialization routines. Therefore, a new little helper tool
+gets introduced to generate missing Linux kernel function definitions
+automatically.
+
+Last time we have seen that all stated Linux kernel's compilation units got
+linked together without errors. Because we did not call any Linux functions yet.
+Now, the question arises how to initialize the different Linux subsystems
+correctly that we've chosen?
+
+Well, typically the Linux kernel gets invoked using an architecture-specific
+assembler path by the bootloader. That code initializes other CPU cores - if
+available - prepares the kernel's page-tables etc.. Everything which is done at
+this stage is not of any interest when cutting out drivers, or protocol-stacks.
+The architecture-specific code at some point calls the generic 'start_kernel()'
+function in 'init/main.c'. Within that routine further architecture-specific
+code gets called, resource management structures get initialized, and so on.
+Some of the initialization routines might be interesting for us at a later point
+in time, as long as we re-use some management structures of the Linux kernel. For
+example, if we decide to re-use the Radix tree or workqueue implementation of
+the kernel, those initializations are called explicitely at this early point.
+But for now, we leave this out. At the very end of the 'start_kernel' routine a
+kernel thread is spawned that executes the 'kernel_init' function. This function
+is doing all missing initializations, especially for driver subsytems. It calls
+'do_basic_setup()', which again is calling 'driver_init()' and 'do_initcalls()'.
+Those two functions are of special interest to us, when trying to enliven a cut
+device-driver.
+
+We concentrate on 'do_initcalls()' and leave the 'driver_init()' routine aside
+for now. As the name suggests it shall call all "initcalls". All non-central
+Linux kernel subsystems, like drivers, protocol-stacks, etc., are using these
+initcalls to initialize themselves, register at the kernel, e.g., to be able to
+probe devices. A bunch of macros in the Linux kernel are used to register
+these initcalls. For more information about the mechnism, please refer to
+[https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-3.html - linux-insides].
+The question is how do the macros used in a driver can make sure that
+'do_initcalls()' will find them? The answer is that the original macro code
+marks the initcalls to be part of a special linker section called '.init'. But
+in Genode's linker script for normal, dynamically linked components symbols for
+the '.init' section are not kept. Therefore, if we do not want to change
+Genode's linker script and pollute it with Linux device driver stuff, we have
+come up with another idea.
+
+In the past, we re-defined the Linux initcall macros in our device driver
+environments in a way that you could find the symbols my manually searching for
+a defined name pattern. Then you had to explicitely call them within your driver
+component. This approach has some drawbacks. First it is again manual work that
+needs to be done. Especially it means you always have to check for additional
+initcalls after you add original Linux kernel compilation units during the
+development process. Second the priority order of the initcalls is getting lost.
+
+A possibility to initally execute arbitrary function calls is to use static
+constructors. To use them we first have to shadow the original Linux kernel
+header, which defines the macros for initcalls. It is named 'linux/init.h'. So I
+added a 'shadow' include path that is the first in the include path order to my
+driver repository, and created a 'linux/init.h' file therein. Because we do not
+want to re-implement and track everything declared in this header, we can do a
+little trick, and first write:
+
+! #pragma once
+!
+! #include_next <linux/init.h>
+!
+! #undef ___define_initcall
+! #undef __define_initcall
+
+So we include the original file, but undefine the distracting macros.
+These two macros are defining the '.init' section magic of the initcalls. We can
+simply replace it with:
+
+! #define __define_initcall(fn, id) \
+! static void __initcall_##fn##id(void)__attribute__((constructor)); \
+! static void __initcall_##fn##id() { \
+!       lx_emul_register_initcall(fn, id); };
+
+The 'lx_emul_register_initcall' function here simply puts the registered
+function call 'fn' with its priority 'id' into a list. At the beginning of the
+new driver component, we first execute all static constructors. Thereby the list
+of initcalls gets filled. And then we iterate through the list of initcalls to
+execute them in order:
+
+! #include <base/component.h>
+!
+! void Component::construct(Genode::Env &env)
+! {
+!     env.exec_static_constructors();
+!     /* iterate through the list of initcalls and call them in order */
+! }
+
+Finally, all macros that refer to '__define_initcall' are getting re-defined
+like so:
+
+! #undef core_initcall
+! #undef core_initcall_sync
+! #undef postcore_initcall
+! #undef postcore_initcall_sync
+! #undef arch_initcall
+! #undef arch_initcall_sync
+! #undef subsys_initcall
+! #undef subsys_initcall_sync
+! #undef fs_initcall
+! #undef fs_initcall_sync
+! #undef device_initcall
+! #undef device_initcall_sync
+! #undef late_initcall
+! #undef late_initcall_sync
+! #undef early_initcall
+! #undef rootfs_initcall
+! #undef console_initcall
+!
+! #define early_initcall(fn)          __define_initcall(fn, 0)
+! #define core_initcall(fn)           __define_initcall(fn, 1)
+! #define core_initcall_sync(fn)      __define_initcall(fn, 2)
+! #define postcore_initcall(fn)       __define_initcall(fn, 3)
+! #define postcore_initcall_sync(fn)  __define_initcall(fn, 4)
+! #define arch_initcall(fn)           __define_initcall(fn, 5)
+! #define arch_initcall_sync(fn)      __define_initcall(fn, 6)
+! #define subsys_initcall(fn)         __define_initcall(fn, 7)
+! #define subsys_initcall_sync(fn)    __define_initcall(fn, 8)
+! #define fs_initcall(fn)             __define_initcall(fn, 9)
+! #define fs_initcall_sync(fn)        __define_initcall(fn, 10)
+! #define device_initcall(fn)         __define_initcall(fn, 11)
+! #define device_initcall_sync(fn)    __define_initcall(fn, 12)
+! #define late_initcall(fn)           __define_initcall(fn, 13)
+! #define late_initcall_sync(fn)      __define_initcall(fn, 14)
+
+Now, everything is in place and regardless of which Linux subsystems we may add,
+their initcalls are called in the correct order.
+
+When testing the result, you'll be flooded by linker error messages of tens till
+hundreds of 'undefined references' due to missing Linux kernel function
+definitions. This is the second annoying, tiresome work that was needed to be
+done in the past when tailoring device driver emulation environments: filter the
+undefined references and build definitions for them.
+
+From the very beginning it was clear that additional tools to summarize missing
+references, and to automatically generate function and variable definitions have
+the potential to drastically minimize effort. Moreover, it should help in
+identifying an "optimum" of compilation units used out of Linux kernel code.
+Thereby minimizing the amount of functions that need to be provided by the
+emulation environment.
+
+I've experimented with the tools 'cscope' and 'ctags' in addition to 'nm' from
+binutils to retrieve all necessary information from headers, objects, and
+C-files. It went out that cscope is much more useful in an interactive fashion.
+But a recent version of [https://github.com/universal-ctags/ - Universal Ctags]
+provided the means I needed. What came out is a little tool called
+[https://raw.githubusercontent.com/skalk/genode/imx8mq_dde_linux_experiment/tool/dde_linux/create_dummies - create_dummies].
+
+It can be directly invoked in a Genode build directory with a given 'TARGET'
+that means the component you are trying to build. Or you invoke it with the build
+directory given as a variable, like so:
+
+! tool/dde_linux/create_dummies show TARGET=drivers/framebuffer BUILD_DIR=build/arm_v8a
+
+It simply wraps the Genode build process and
+collects the missing references the linker complains about. When invoked with
+the command 'show', it prints a summary of all missing reference names and its
+total sum. Using this command, you can try to find a good subset of Linux kernel
+compilation units until you are fine with the presented missing references. For
+instance you initially get about 200 missing symbols. But when looking at the
+sorted names, you identify a number of symbols starting with 'idr_'.
+By using the following command inside your Linux kernel's build directory:
+
+! genode-aarch64-nm --print-file-name `find .  -name *.o` |  | grep -i " t " | grep "\<idr_"
+
+you identify 'lib/radix-tree.c' and 'lib/idr.c' to provide all of these
+functions. After adding both C-files to your component and invoking
+'create_dummies show' again, you can see that the missing symbols are reduced by
+eight. And you continue that work. On the other hand it might happen that you
+add a C-file from the Liux kernel that drastically increases the undefined
+symbols.
+
+Finally, when you find a good set of Linux kernel sources to be used, you can
+generate all missing symbols by doing 'create_dummies generate':
+
+! tool/dde_linux/create_dummies generate TARGET=drivers/framebuffer LINUX_KERNEL_DIR=~/src/linux-reform2 DUMMY_FILE=repos/imx8mq/src/drivers/framebuffer/generated_dummies.c BUILD_DIR=build/arm_v8a
+
+ Apart from the 'TARGET', additionally you have to provide the
+'LINUX_KERNEL_DIR' and the 'DUMMY_FILE' where the results are written to. The
+'LINUX_KERNEL_DIR' path is used to run 'ctags' on Linux headers and C-files, and
+'nm' on the object files to obtain the right definitions.
+
+The resulting dummy definitions file looks like the following:
+
+! /*
+!  * \brief  Dummy definitions of Linux Kernel functions
+!  * \author Automatically generated file - do no edit
+!  * \date   2021-04-08
+!  */
+!
+! #include <lx_emul.h>
+!
+!
+! #include <linux/clk-provider.h>
+!
+! const char * __clk_get_name(const struct clk * clk)
+! {
+!         lx_emul_trace_and_stop(__func__);
+! }
+!
+!
+! #include <asm-generic/delay.h>
+!
+! void __const_udelay(unsigned long xloops)
+! {
+!         lx_emul_trace_and_stop(__func__);
+! }
+!
+! ...
+
+As you can see the dummy generator first includes the header which declares the
+function - as long as it found it - otherwise it includes the declaration directly
+instead. The function definition itself only contains the call to
+'lx_emul_trace_and_stop'. This function as part of a new generic Linux
+emulation environment is declared as a 'noreturn' function:
+
+! __attribute__((noreturn)) void lx_emul_trace_and_stop(const char * func);
+
+Thereby, we do not have to return an otherwise hard to decide default value.
+Anyway, the compiler will not complain about the missing return value.
+When 'lx_emul_trace_and_stop' gets invoked it prints an error message and a
+backtrace, which makes it easy to retrieve, which Linux code path ended in
+that generated dummy function.
+
+The 'create_dummies' tool works not hundred percent free-of-failure. In some
+rare cases ~3%, the tool cannot find a definition or it prints an
+erroneous definition. Mostly this results out of the macro carnival that is
+celebrated in Linux kernel code. Tools like 'ctags' that operate on
+non-preprocessed source code are lost at some point. Anyway, I've started to
+collect the erroneous generated and manually picked definitions in a separate
+'dummies.c' file during development. When doing so, they do not disturb you in
+the long run.
+
+Now, we have a state where we can choose arbritrary Linux source files, compile
+and link them together. Wen can generate fully automatic all missing symbols and
+execute the result. In the next blog post, I'll continue with describing how to
+identify the absolute necessary C-files given a device-driver you want to port.
