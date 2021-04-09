@@ -238,6 +238,6 @@ collect the erroneous generated and manually picked definitions in a separate
 the long run.
 
 Now, we have a state where we can choose arbritrary Linux source files, compile
-and link them together. Wen can generate fully automatic all missing symbols and
+and link them together. We can generate fully automatic all missing symbols and
 execute the result. In the next blog post, I'll continue with describing how to
 identify the absolute necessary C-files given a device-driver you want to port.
