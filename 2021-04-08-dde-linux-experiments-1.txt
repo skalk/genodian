@@ -37,7 +37,7 @@ Linux kernel subsystems, like drivers, protocol-stacks, etc., are using these
 initcalls to initialize themselves, register at the kernel, e.g., to be able to
 probe devices. A bunch of macros in the Linux kernel are used to register
 these initcalls. For more information about the mechnism, please refer to
-[https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-3.html - linux-insides].
+[https://bit.ly/3fWbiE0 - linux-insides].
 The question is how do the macros used in a driver can make sure that
 'do_initcalls()' will find them? The answer is that the original macro code
 marks the initcalls to be part of a special linker section called '.init'. But
