@@ -33,11 +33,11 @@ The pre-built docker image that contains a minimal Ubuntu 20.04 installation and
 all tools needed to build Genode and all of its supported 3rd party software is
 located at:
 
-[https://genode.org/files/genode-docker-20.04-image.tar]
+[https://genode.org/files/genode-docker-21.05-image.tar]
 
 Its SHA1 hashsum is:
 
-! a29428f8a76c87b18f5aea33b14daf2a21a90f1e genode-docker-20.04-image.tar
+! f311b997ad8d386fde630361c8fce20814a62fe2 genode-docker-21.05-image.tar
 
 For convenience reasons, and for all those who are not familiar with using
 docker to be used as a starting point, I've create a small wrapper tool,
@@ -94,4 +94,6 @@ Even, if you are not willing to use docker in the future, you might profit from
 the new [https://github.com/skalk/genode-devel-docker/blob/master/Dockerfile - recipe],
 because it summarizes all dependencies of the Genode build system, run tool +
 plugins, and all the dependencies of third party software like QT5, sel4,
-Muen, Fiasco.OC, etc..
+Fiasco.OC, etc..
+
+_Edit (2021-06-01): updated to Genode's toolchain 21.05_
