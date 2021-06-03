@@ -1,0 +1,122 @@
+                  MNT Reform 2 - Run Sculpt OS
+
+It has been a while since I started to do the first steps of
+porting Genode to the MNT Reform 2.
+
+Since then the biggest hurdle was to enable the graphical subsystem and display.
+Unfortunately, the port of the i.MX 8MQ graphical subsystem
+[http://genodians.org/ssumpf/2020-09-30-mipi_touch - available in Genode]
+was based on a vendor fork of the Linux kernel 4.14. In contrast the MNT Reform 2
+reference kernel is a recent vanilla Linux kernel 5.11 with some additional
+patches especially to the graphical subsystem. Hardware parts present in the MNT
+Reform 2, like the eDP to MIPI bridge that is used to connect the panel, were
+not present in the old vendor kernel at all. To make a long story short,
+backporting the new features in a reasonable time failed. But as a positive
+outcome the whole experience encouraged me in rethinking the way we port Linux
+kernel drivers to Genode, see the posts
+[http://genodians.org/skalk/2021-04-06-dde-linux-experiments - Breaking new ground]
+and [http://genodians.org/skalk/2021-04-08-dde-linux-experiments-1 - Generate dummy function definitions].
+
+Before continuing the description and results of this new porting approach
+in more detail, I want to share with you the state of using Genode respectively
+running Sculpt on the MNT Reform 2.
+
+[image reform_sculpt_21.05]
+
+Download and boot Sculpt OS
+---------------------------
+
+If you want to test out this yet unofficial release of the Sculpt OS for the MNT
+Reform 2, you can download a pre-built SD-card image from here:
+
+:Download SD-card image:
+  [https://genode.org/files/sculpt/sculpt-mnt-reform2-21.05.img - sculpt-mnt-reform2-21.05.img] _(17 MiB)_ [https://genode.org/files/sculpt/sculpt-mnt-reform2-21.05.img.asc - signature]
+  'SHA256 20f59c800a1bfc0b7b8ce57e20b94d2bd79e168ed5a113be6137ac5fb88a0345'
+
+You can copy the image on a fresh SD-card by using 'dd'. Assuming your SD-card
+is named '/dev/mmcblk0' when connected to your Linux host machine, then do:
+
+! sudo dd if=sculpt-mnt-reform2-21.05.img of=/dev/mmcblk0 conv=fsync
+
+
+Building a Sculpt image from scratch
+------------------------------------
+
+Analoque to the Pinephone and A64 development work described by Norman Feske in
+his article series, I have decided to collect all work related to the MNT Reform
+2 and its i.MX 8MQ SoC foundation in a dedicated repository:
+
+:Genode support for i.MX 8MQ based boards:
+  [https://github.com/skalk/genode-imx8mq]
+
+It is based on the recently released Genode 21.05 and a few additional commits.
+To give it a try, you need to checkout Genode first:
+
+! git clone https://github.com/genodelabs/genode.git genode
+! cd genode
+! git checkout 336350fe603fde4deb793f03d64fa31a99a5acf7 -b mnt_reform2_sculpt
+
+Then you need to add the dedicated repository, which contains additional driver
+ingredients for the MNT Reform 2:
+
+! git clone https://github.com/skalk/genode-imx8mq.git repos/imx8mq
+
+Of course, you will need the Genode toolchain 21.05, either you install it into
+your development environment, see the
+[https://genode.org/download/tool-chain - toolchain download page],
+or you take the Docker container available, see article
+[http://genodians.org/skalk/2020-09-29-docker-devel - Genode development container]
+for more details.
+
+Before, you can build Sculpt, you have to download all 3rd party sources needed
+first:
+
+! tool/ports/prepare_port bash coreutils curl dde_linux dde_rump e2fsprogs-lib gnupg jitterentropy libarchive libc libgcrypt libpng libssh mnt_reform2_linux mnt_reform2_uboot ncurses openssl stb ttf-bitstream-vera vim xz zlib
+
+Now, you can create the necessary depot packages:
+
+! tool/depot/create genodelabs/pkg/arm_v8a/sculpt-mnt_reform2 genodelabs/bin/arm_v8a/base-hw-mnt_reform2 CROSS_DEV_PREFIX=/usr/local/genode/tool/21.05/bin/genode-aarch64- UPDATE_VERSIONS=1 -j8
+
+To finally create the system's image, we need a build directory first:
+
+! tool/create_builddir arm_v8a
+
+and add the new 'imx8mq' repository to the 'REPOSITORIES' variable in
+'build/arm_v8a/etc/build.conf', but ensure that it is the very first assignment
+to this variable, e.g. by putting it at the second line:
+
+! REPOSITORIES += $(GENODE_DIR)/repos/imx8mq
+
+Moreover, you have to enable the following repositories that are commented out
+by default:
+
+! REPOSITORIES += $(GENODE_DIR)/repos/libports
+! REPOSITORIES += $(GENODE_DIR)/repos/ports
+! REPOSITORIES += $(GENODE_DIR)/repos/dde_linux
+! REPOSITORIES += $(GENODE_DIR)/repos/dde_rump
+! REPOSITORIES += $(GENODE_DIR)/repos/gems
+
+By adding:
+
+! BOARD_RUN_OPT(mnt_reform2) := --include $(GENODE_DIR/repos/imx8mq/tool/run/image/mnt_reform2
+
+you include a run-tool plugin to produce a ready-to-boot SD-card image for the
+MNT Reform 2 including the bootloader, Sculpt system image, and GPT partition
+scheme. Then finally, you build this image via:
+
+! cd build/arm_v8a
+! make run/sculpt KERNEL=hw BOARD=mnt_reform2
+
+The resulting image is located at 'var/run/sculpt.img', and can be written to
+an SD-card, like described at the beginning of this post.
+
+Outlook
+-------
+
+So far there are no pre-built, official packages available for this unofficial
+MNT Reform 2 release of Sculpt OS. Of course, you can build your own ones and
+deploy them.
+Moreover, the SD-card driver and Ethernet driver are not production ready yet.
+I like to rework them soon to be stable and more performant. Also, the
+framebuffer driver is still hardcoded to use the laptop's panel, but won't drive
+a monitor connected via HDMI. This will be changed soon too.
