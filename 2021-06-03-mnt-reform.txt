@@ -98,7 +98,7 @@ by default:
 
 By adding:
 
-! BOARD_RUN_OPT(mnt_reform2) := --include $(GENODE_DIR/repos/imx8mq/tool/run/image/mnt_reform2
+! BOARD_RUN_OPT(mnt_reform2) := --include image/mnt_reform2
 
 you include a run-tool plugin to produce a ready-to-boot SD-card image for the
 MNT Reform 2 including the bootloader, Sculpt system image, and GPT partition
