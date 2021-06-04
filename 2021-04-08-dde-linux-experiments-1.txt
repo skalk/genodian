@@ -31,6 +31,9 @@ is doing all missing initializations, especially for driver subsytems. It calls
 Those two functions are of special interest to us, when trying to enliven a cut
 device-driver.
 
+Initcalls
+---------
+
 We concentrate on 'do_initcalls()' and leave the 'driver_init()' routine aside
 for now. As the name suggests it shall call all "initcalls". All non-central
 Linux kernel subsystems, like drivers, protocol-stacks, etc., are using these
@@ -76,13 +79,13 @@ simply replace it with:
 ! #define __define_initcall(fn, id) \
 ! static void __initcall_##fn##id(void)__attribute__((constructor)); \
 ! static void __initcall_##fn##id() { \
-!       lx_emul_register_initcall(fn, id); };
+!       lx_emul_register_initcall(fn, __func__); };
 
 The 'lx_emul_register_initcall' function here simply puts the registered
-function call 'fn' with its priority 'id' into a list. At the beginning of the
+function call 'fn' with its name into a list. At the beginning of the
 new driver component, we first execute all static constructors. Thereby the list
 of initcalls gets filled. And then we iterate through the list of initcalls to
-execute them in order:
+execute them:
 
 ! #include <base/component.h>
 !
@@ -92,45 +95,26 @@ execute them in order:
 !     /* iterate through the list of initcalls and call them in order */
 ! }
 
-Finally, all macros that refer to '__define_initcall' are getting re-defined
-like so:
+The execution order of initcalls is essential, because they have inner dependencies.
+Unfortunately, those dependencies are not stated explicitely. It is determined
+by the linking order, and thereby by the order of compilation unit declarations
+within the widespread Makefiles of the Linux kernel's build system. To not get
+lost in these innards we better take the results of a kernel build. It can be
+found in the 'System.map' of a completed kernel build. To easily extract the
+order of initcall names out of it, I have prepared a simple tool under
+'tool/dde_linux/extract_initcall_order' within the Genode main repository.
+By calling:
 
-! #undef core_initcall
-! #undef core_initcall_sync
-! #undef postcore_initcall
-! #undef postcore_initcall_sync
-! #undef arch_initcall
-! #undef arch_initcall_sync
-! #undef subsys_initcall
-! #undef subsys_initcall_sync
-! #undef fs_initcall
-! #undef fs_initcall_sync
-! #undef device_initcall
-! #undef device_initcall_sync
-! #undef late_initcall
-! #undef late_initcall_sync
-! #undef early_initcall
-! #undef rootfs_initcall
-! #undef console_initcall
-!
-! #define early_initcall(fn)          __define_initcall(fn, 0)
-! #define core_initcall(fn)           __define_initcall(fn, 1)
-! #define core_initcall_sync(fn)      __define_initcall(fn, 2)
-! #define postcore_initcall(fn)       __define_initcall(fn, 3)
-! #define postcore_initcall_sync(fn)  __define_initcall(fn, 4)
-! #define arch_initcall(fn)           __define_initcall(fn, 5)
-! #define arch_initcall_sync(fn)      __define_initcall(fn, 6)
-! #define subsys_initcall(fn)         __define_initcall(fn, 7)
-! #define subsys_initcall_sync(fn)    __define_initcall(fn, 8)
-! #define fs_initcall(fn)             __define_initcall(fn, 9)
-! #define fs_initcall_sync(fn)        __define_initcall(fn, 10)
-! #define device_initcall(fn)         __define_initcall(fn, 11)
-! #define device_initcall_sync(fn)    __define_initcall(fn, 12)
-! #define late_initcall(fn)           __define_initcall(fn, 13)
-! #define late_initcall_sync(fn)      __define_initcall(fn, 14)
+! tool/dde_linux/extract_initcall_order extract LINUX_KERNEL_DIR=~/src/linux-reform2 HEADER_FILE=repos/imx8mq/src/drivers/framebuffer/lx_emul/initcall_order.h
+
+a header file gets created that defines an array with all initcall names of that
+kernel build.
 
 Now, everything is in place and regardless of which Linux subsystems we may add,
 their initcalls are called in the correct order.
+
+Generate missing implementations
+--------------------------------
 
 When testing the result, you'll be flooded by linker error messages of tens till
 hundreds of 'undefined references' due to missing Linux kernel function
@@ -181,7 +165,7 @@ generate all missing symbols by doing 'create_dummies generate':
 
 ! tool/dde_linux/create_dummies generate TARGET=drivers/framebuffer LINUX_KERNEL_DIR=~/src/linux-reform2 DUMMY_FILE=repos/imx8mq/src/drivers/framebuffer/generated_dummies.c BUILD_DIR=build/arm_v8a
 
- Apart from the 'TARGET', additionally you have to provide the
+Apart from the 'TARGET', additionally you have to provide the
 'LINUX_KERNEL_DIR' and the 'DUMMY_FILE' where the results are written to. The
 'LINUX_KERNEL_DIR' path is used to run 'ctags' on Linux headers and C-files, and
 'nm' on the object files to obtain the right definitions.
@@ -241,3 +225,5 @@ Now, we have a state where we can choose arbritrary Linux source files, compile
 and link them together. We can generate fully automatic all missing symbols and
 execute the result. In the next blog post, I'll continue with describing how to
 identify the absolute necessary C-files given a device-driver you want to port.
+
+_Edit (2021-06-04): updated initcall section_
