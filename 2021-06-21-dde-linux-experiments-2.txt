@@ -1,0 +1,84 @@
+        Linux device driver ports - Choose compilation units
+
+In my [https://genodians.org/skalk/2021-04-06-dde-linux-experiments - first blog post]
+of this series, I've described the motivation to break new grounds in porting Linux
+drivers to Genode. Moreover, you've seen how to re-use the headers and
+configuration of a pre-built Linux kernel. In the
+[https://genodians.org/skalk/2021-04-08-dde-linux-experiments-1 - last blog post],
+we continued our journey with a new helper tool to generate missing Linux kernel
+function definitions automatically. This time I'll continue with how to choose
+the absolutely necessary compilation units for a given driver resp. subsystem.
+
+The example showcased in the following is less than trivial. We want to enable
+the display of the MNT Reform 2. The whole device-tree of this system as
+provided in its Linux kernel fork, looks like the following:
+
+[image device_tree_full]
+
+By studying the device tree, the reference manual of the i.MX8 MQ SoC and
+the MNT Reform2 book in more detail, I've identified some critical components
+involved in the display system, but most prominent the Display Controller
+Subsystem (DCSS). By using the
+[http://genodians.org/nfeske/2021-05-19-pine-dts-pruning - device-tree extraction tool]
+with the DCSS as extraction target, you can easily strip down the device tree to
+a minimum necessary to enable the display, like you can see in the figure below.
+
+[image device_tree_stripped]
+
+There are still a lot of devices left that we do not want to control via the
+framebuffer driver port. For instance reset-pins, power domains, and clocks that are
+controlled by the platform driver for i.MX 8MQ already. The Generic Interrupt
+Controller (gic) that is under control of the kernel itself is another
+example. Moreover, we already have protocol APIs for I2C and GPIO and drivers
+for this platform within the Genode framework. Therefore, we want to drive these
+devices, which typically offer resources to different other peripherals as well,
+separatly. The remaining device nodes from the original device tree is the set
+we want to drive with the sighted Linux Kernel port. They are marked yellow in
+the below figure.
+
+[image device_tree_colored]
+
+Now, its time to open the stripped down device tree source file, and look at
+those nodes in more detail. To identify the compilation unit equivalents of a
+single device node, we have to especially look for 'compatible' properties in
+those nodes. In the following I list all collected 'compatible' strings of the
+formerly identified device nodes:
+
+! compatible = "fsl,imx8mq-lcdif", "fsl,imx28-lcdif";
+! compatible = "fsl,imx8m-irqsteer", "fsl,imx-irqsteer";
+! compatible = "fsl,imx8mq-nwl-dsi";
+! compatible = "fsl,imx8mq-mipi-dphy";
+! compatible = "nxp,imx8mq-dcss";
+! compatible = "ti,sn65dsi86";
+! compatible = "innolux,n125hce-gn1", "simple-panel";
+
+Now, you can use 'grep' to find the corresponding source files, e.g. like so:
+
+! grep -r "fsl,imx8mq-lcdif" linux-source-path/drivers # delivered no hit
+! grep -r "fsl,imx28-lcdif"  linux-source-path/drivers # then try the second one
+
+After looking up all different 'compatible' strings, I've identified the
+following source files:
+
+! drivers/gpu/drm/mxsfb/mxsfb_drv.c
+! drivers/irqchip/irq-imx-irqsteer.c
+! drivers/gpu/drm/bridge/nwl-dsi.c
+! drivers/phy/freescale/phy-fsl-imx8-mipi-dphy.c
+! drivers/gpu/drm/imx/dcss/dcss-drv.c
+! drivers/gpu/drm/bridge/ti-sn65dsi86.c
+! drivers/gpu/drm/panel/panel-simple.c
+
+This is the absolute minimum of sources needed, and the starting point to be
+used in conjuction with the 'create_dummies' utility introduced in the
+[https://genodians.org/skalk/2021-04-08-dde-linux-experiments-1 - last blog post].
+
+By looking at the undefined missing references when using 'create_dummies show',
+you might identify further interesting compilation units useful to re-use
+instead of emulating it on your own.
+
+One further hint. Sometimes it is useful to re-use whole subsystems in the first
+place to have results at hand in a short time. e.g., everything under
+'drivers/gpu/drm/imx/' in our example. In those cases, please verify that the
+all sources are used in the original configuration as well. I used the pattern
+to wildcard all object files, and turn them into C-files in my makefile target
+therefore.
