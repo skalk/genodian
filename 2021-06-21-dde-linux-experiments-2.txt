@@ -78,7 +78,11 @@ instead of emulating it on your own.
 
 One further hint. Sometimes it is useful to re-use whole subsystems in the first
 place to have results at hand in a short time. e.g., everything under
-'drivers/gpu/drm/imx/' in our example. In those cases, please verify that the
-all sources are used in the original configuration as well. I used the pattern
-to wildcard all object files, and turn them into C-files in my makefile target
-therefore.
+'drivers/gpu/drm/imx/' in our example. In those cases, please verify that
+all sources you select, are used in the original configuration as well.
+To ensure it, I've typically collected all object files of a directory with a
+wildcard rule in the makefile of the target, and turned the results into C-file
+compilation targets, like:
+
+! OBJECTS = $(wildcard $(LX_CONTRIB_DIR)/drivers/gpu/drm/imx/*.o)
+! SRC_C  += $(OBJECTS:%.o=%.c)
