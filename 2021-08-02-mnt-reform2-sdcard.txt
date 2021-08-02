@@ -1,0 +1,68 @@
+              MNT Reform 2 - Use Sculpt OS on SD-card
+
+There is a new, updated Sculpt OS version available for the MNT Reform 2. It
+features a fully functional, and more performant SD-card driver. It enables you
+to persistently install Sculpt OS and additional depot packages on your MNT
+Reform 2. Moreover, the new driver support enables you to exchange the SD-card
+dynamically at runtime.
+
+Download and boot Sculpt OS
+---------------------------
+
+If you want to test out this still unofficial release of the Sculpt OS for the MNT
+Reform 2, you can download a pre-built SD-card image from here:
+
+:Download SD-card image:
+  [https://genode.org/files/sculpt/sculpt-mnt-reform2-21.07.img - sculpt-mnt-reform2-21.07.img] _(18 MiB)_ [https://genode.org/files/sculpt/sculpt-mnt-reform2-21.07.img.asc - signature]
+  'SHA256 b002ce7a948f3f4969928a61a7483a8e60259714ba19a4dffba3d29fd4fb5c00'
+
+You can copy the image on a fresh SD-card by using 'dd'. Assuming your SD-card
+is named '/dev/mmcblk0' when connected to your Linux host machine, then do:
+
+! sudo dd if=sculpt-mnt-reform2-21.07.img of=/dev/mmcblk0 conv=fsync
+
+
+Building a Sculpt image from scratch
+------------------------------------
+
+Alternatively, you can build the Sculpt image on your own. Therefore, you need
+to checkout the latest master branch of the Genode repository, as well as the
+Genode i.MX 8MQ repository:
+
+! git clone https://github.com/genodelabs/genode.git genode
+! cd genode
+! git checkout fce525f122db34718ce1710ba7b0233da520ac9b -b mnt_reform2_sculpt
+! git clone https://github.com/skalk/genode-imx8mq.git repos/imx8mq
+! cd repos/imx8mq
+! git checkout bf251edc9743cac2e9585b09d1798d327e4539c1 -b mnt_reform2_sculpt
+
+For all further necessary steps, please follow the instructions of the
+[http://genodians.org/skalk/2021-06-03-mnt-reform - first blog post]
+about Sculpt OS on MNT Reform 2.
+
+Use the SD-card as installation target
+--------------------------------------
+
+After booting Sculpt OS on the MNT Reform 2, you can now select the first (and
+only) partition of the SD-card in the storage menu. The dialog that opens allows
+you to expand this small partition, which first only contains the boot image.
+
+[image sculpt_reform2_expand]
+
+After the resizing of partition and file-system got effective, you can click
+to "use" the partition as target device of the Genode depot. Then you need to connect
+the MNT Reform 2 to an ethernet, and select "Wired" in the network dialog in the
+right-top corner.
+
+[image sculpt_reform2_net_use]
+
+Finally, choose the "+" sign above the storage dialog, "Depot". and
+"Selection". From the selection that opens, you can choose the "skalk"
+repository as depot package source.
+
+[image sculpt_reform2_depot_skalk]
+
+Now, you will be able to install all Genode depot packages, which you
+might already know from the PC variant of Sculpt OS.
+
+Have fun!
