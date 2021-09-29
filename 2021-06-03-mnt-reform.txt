@@ -46,8 +46,8 @@ Analoque to the Pinephone and A64 development work described by Norman Feske in
 his article series, I have decided to collect all work related to the MNT Reform
 2 and its i.MX 8MQ SoC foundation in a dedicated repository:
 
-:Genode support for i.MX 8MQ based boards:
-  [https://github.com/skalk/genode-imx8mq]
+:Genode support for i.MX based boards:
+  [https://github.com/skalk/genode-imx]
 
 It is based on the recently released Genode 21.05 and a few additional commits.
 To give it a try, you need to checkout Genode first:
@@ -59,7 +59,7 @@ To give it a try, you need to checkout Genode first:
 Then you need to add the dedicated repository, which contains additional driver
 ingredients for the MNT Reform 2:
 
-! git clone https://github.com/skalk/genode-imx8mq.git repos/imx8mq
+! git clone https://github.com/skalk/genode-imx.git repos/imx
 
 Of course, you will need the Genode toolchain 21.05, either you install it into
 your development environment, see the
@@ -81,11 +81,11 @@ To finally create the system's image, we need a build directory first:
 
 ! tool/create_builddir arm_v8a
 
-and add the new 'imx8mq' repository to the 'REPOSITORIES' variable in
+and add the new 'imx' repository to the 'REPOSITORIES' variable in
 'build/arm_v8a/etc/build.conf', but ensure that it is the very first assignment
 to this variable, e.g. by putting it at the second line:
 
-! REPOSITORIES += $(GENODE_DIR)/repos/imx8mq
+! REPOSITORIES += $(GENODE_DIR)/repos/imx
 
 Moreover, you have to enable the following repositories that are commented out
 by default:
@@ -120,3 +120,5 @@ Moreover, the SD-card driver and Ethernet driver are not production ready yet.
 I like to rework them soon to be stable and more performant. Also, the
 framebuffer driver is still hardcoded to use the laptop's panel, but won't drive
 a monitor connected via HDMI. This will be changed soon too.
+
+_Edit (2021-09-29): updated to repository renaming of genode-imx.git_

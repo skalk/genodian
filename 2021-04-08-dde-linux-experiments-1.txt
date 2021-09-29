@@ -105,7 +105,7 @@ order of initcall names out of it, I have prepared a simple tool under
 'tool/dde_linux/extract_initcall_order' within the Genode main repository.
 By calling:
 
-! tool/dde_linux/extract_initcall_order extract LINUX_KERNEL_DIR=~/src/linux-reform2 HEADER_FILE=repos/imx8mq/src/drivers/framebuffer/lx_emul/initcall_order.h
+! tool/dde_linux/extract_initcall_order extract LINUX_KERNEL_DIR=~/src/linux-reform2 HEADER_FILE=repos/imx/src/drivers/framebuffer/lx_emul/initcall_order.h
 
 a header file gets created that defines an array with all initcall names of that
 kernel build.
@@ -134,7 +134,7 @@ binutils to retrieve all necessary information from headers, objects, and
 C-files. It went out that cscope is much more useful in an interactive fashion.
 But a recent version of [https://github.com/universal-ctags/ - Universal Ctags]
 provided the means I needed. What came out is a little tool called
-[https://raw.githubusercontent.com/skalk/genode/imx8mq_dde_linux_experiment/tool/dde_linux/create_dummies - create_dummies].
+[https://raw.githubusercontent.com/genodelabs/genode/master/tool/dde_linux/create_dummies - create_dummies].
 
 It can be directly invoked in a Genode build directory with a given 'TARGET'
 that means the component you are trying to build. Or you invoke it with the build
@@ -163,7 +163,7 @@ symbols.
 Finally, when you find a good set of Linux kernel sources to be used, you can
 generate all missing symbols by doing 'create_dummies generate':
 
-! tool/dde_linux/create_dummies generate TARGET=drivers/framebuffer LINUX_KERNEL_DIR=~/src/linux-reform2 DUMMY_FILE=repos/imx8mq/src/drivers/framebuffer/generated_dummies.c BUILD_DIR=build/arm_v8a
+! tool/dde_linux/create_dummies generate TARGET=drivers/framebuffer LINUX_KERNEL_DIR=~/src/linux-reform2 DUMMY_FILE=repos/imx/src/drivers/framebuffer/generated_dummies.c BUILD_DIR=build/arm_v8a
 
 Apart from the 'TARGET', additionally you have to provide the
 'LINUX_KERNEL_DIR' and the 'DUMMY_FILE' where the results are written to. The
@@ -227,3 +227,4 @@ execute the result. In the next blog post, I'll continue with describing how to
 identify the absolute necessary C-files given a device-driver you want to port.
 
 _Edit (2021-06-04): updated initcall section_
+_Edit (2021-09-29): updated to repository renaming of genode-imx.git_

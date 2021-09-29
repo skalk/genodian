@@ -32,8 +32,8 @@ Genode i.MX 8MQ repository:
 ! git clone https://github.com/genodelabs/genode.git genode
 ! cd genode
 ! git checkout fce525f122db34718ce1710ba7b0233da520ac9b -b mnt_reform2_sculpt
-! git clone https://github.com/skalk/genode-imx8mq.git repos/imx8mq
-! cd repos/imx8mq
+! git clone https://github.com/skalk/genode-imx.git repos/imx
+! cd repos/imx
 ! git checkout bf251edc9743cac2e9585b09d1798d327e4539c1 -b mnt_reform2_sculpt
 
 For all further necessary steps, please follow the instructions of the
@@ -66,3 +66,5 @@ Now, you will be able to install all Genode depot packages, which you
 might already know from the PC variant of Sculpt OS.
 
 Have fun!
+
+_Edit (2021-09-29): updated to repository renaming of genode-imx.git_
