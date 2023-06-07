@@ -1,0 +1,119 @@
+                  Sculpt OS 23.04 on MNT Reform2
+
+Though so much time has passed since the last Sculpt OS release for MNT Reform2,
+the development did not stop, and I proudly present version 23.04 to you.
+This new release includes some interesting features related to our beloved MNT
+Reform2 laptop, namely:
+* NVMe and Wifi support (both via PCIe)
+* System-update functionality
+* Presets to easily try out certain runtime scenarios including virtualization
+
+[image sculpt_23_04_mnt_reform2 70%]
+  Sculpt 23.04 on MNT Reform2: in the top corners, system-update and WiFi dialog
+
+Installation
+------------
+
+# You can download a pre-built SD-card image from here:
+  [https://depot.genode.org/skalk/image/]
+  You can find the disk image in two forms, as compressed .img.xz file or
+  contained in a .zip file. You may check the downloaded image's integrity with
+  GnuPG using the accompanied .sig files and my
+  [https://github.com/genodelabs/genode/tree/master/repos/gems/sculpt/depot/skalk - public key].
+# Copy the image on a fresh SD-card by using 'dd'. Assuming your SD-card is
+  named '/dev/mmcblk0' when connected to your Linux host machine, then do:
+  ! $ xz -d sculpt-mnt_reform2-<version>.img.xz
+  ! $ sudo dd if=sculpt-mnt_reform2-<version>.img of=/dev/mmcblk0 conv=fsync
+# Boot the MNT Reform2 with the SD-card inserted. After around 10 seconds, the
+  user interface should appear.
+# Extend the Genode partition to the full size of the SD card. Alternatively,
+  you can of course use/format another storage media as Genode partition, like NVMe,
+  eMMC, or USB stick, but then you won't be able to use the system-update
+  functionality for now! The downloaded image contains a tiny partition only
+  capable to hold the base system. Therefore, you need to expand it to the
+  SD-card's actual capacity to have room for applications and data.
+  * Select the "Storage" section
+  * Select the SD-card (typically mmcblk1, better double-check it by comparing the capacity)
+  * Select the partition "1"
+  * Select "Expand" and confirm the operation
+  * After some time, dependent on the SD-card capacity, you should see the
+    partition size has changed
+# Make the expanded partition the default using the 'Default' button.
+
+Quickstart
+----------
+
+After booting, the first screen that you see is the so called "Leitzentrale"
+that gives the user full control over the system.
+
+Once you've chosen a storage media to be used by Sculpt, e.g. the SD-card
+partition containing the boot image (refer to installation section), a 'System'
+button occurs in the top-left corner of the screen. It gives you the choice in
+between of several 'Presets', and a system update dialog. A preset is a bunch of
+Genode components bundled together to form one specific runtime scenario.
+
+Before you can start a preset for the first time, you need to select what kind
+of network connectivity you favor, because additional packages might need to get
+installed. The 'Network' button can be found in the top-right corner of the
+"Leitzentrale". You're able to choose in between wired, and wireless uplinks, at least
+if a PCIe WiFI card is present in you MNT Reform2.
+
+The following presets can be tested out easily:
+
+:empty:
+  Resets the runtime to the initial state with no components present.
+
+:window manager:
+  Starts a window manager and background image together with a UNIX-like system
+  shell. The system shell' environment is formed so that you can edit the
+  configuration file-system of several fundamental components (e.g. drivers,
+  resource multiplexers), and see reports from them. Moreover, you can access your
+  installation file-system under '/rw'.
+
+:falkon web browser:
+  Web browser based on the Chromium engine and Qt5. It is hugely complex. Hence
+  your patience is needed while downloading and extracting it. The browser is
+  configured such that no state is stored persistently by using the ram fs as
+  location for the browser cache, cookies, and downloads. You can wipe this
+  information using "Reset" button of the ram-fs component in the runtime graph.
+
+:debian installer:
+  Starts a tiny Virtual Machine Monitor (VMM) that executes a Debian Linux
+  installer. As storage backend, a Virtual Disk Image (VDI) is created under
+  'recall/debian_installer/vdi_block/block.vdi/block.vdi' within your
+  installation medium. Once, you've passed the installation process till
+  the end, you might take the image as starting point for a persistent Linux VM.
+
+To toggle in between the 'Runtime' showing the actual applications, and the
+"Leitzentrale", please press the 'F12' key.
+
+Apart from these presets you can shape your own runtime using the component
+graph in the middle of the "Leitzentrale", like in an other Sculpt OS variant
+already before.
+
+For further information about the concepts and usage of Sculpt, please refer to
+the [https://genode.org/documentation/articles/sculpt-23-04 - documentation page]
+of the PC version.
+
+Building your own Sculpt image from scratch
+-------------------------------------------
+
+To build Sculpt OS 23.04 for MNT Reform2 you need a recent version of the
+'genode' and 'genode-imx' repositories from Genode Labs account. Additionally to
+integrate the virtualization preset, you need additional ingredients from my
+personal genode-chest repository:
+
+! $ git clone https://github.com/genodelabs/genode.git     genode
+! $ git clone https://github.com/genodelabs/genode-imx.git genode/repos/imx
+! $ git clone https://github.com/skalk/genode-chest.git    genode/repos/chest-skalk
+
+Don't forget to add the additional repositories to the 'REPOSITORIES' variable
+of your build environment.
+
+Of course, you will need the Genode toolchain 23.05. You can get it from
+Genode's [https://genode.org/download/tool-chain - toolchain download page].
+
+To build a Sculpt OS image for MNT Reform2 issue the following in your build
+directory:
+
+! build/arm_v8a$ make run/sculpt_image KERNEL=hw BOARD=mnt_reform2 DEPOT=omit
