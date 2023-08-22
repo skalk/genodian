@@ -1,0 +1,25 @@
+           Docker image with Genode toolchain 23.05
+
+The pre-built docker image to easily develop Genode on top of arbitrary host
+systems got updated to a more recent Ubuntu 22.04 base system. Moreover, it now
+contains the last Genode toolchain 23.05., Qemu 6.2, and all necessary host
+tools to run any kernel, board, and run-script combination.
+
+The docker image is located at:
+
+[https://genode.org/files/genode-docker-23.05-image.tar]
+
+Its SHA1 hashsum is:
+
+! d1b1dc92cd957a43046852497a12e51081adea1a genode-docker-23.05-image.tar
+
+For convenience reasons, and for all those who are not familiar with using
+docker, you can use a small wrapper tool. It comprises the steps to download and
+import the Genode development image, as well as to start a development
+container. At the same location you will find the recipe to build the very same
+docker image on your own. Just checkout the following repository:
+
+! git clone https://github.com/skalk/genode-devel-docker.git
+
+To learn about how to use this little utility, please refer to the
+[https://genodians.org/skalk/2020-09-29-docker-devel - initial blog post] about it.
