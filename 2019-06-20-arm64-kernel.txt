@@ -140,3 +140,6 @@ next page-table pointer in the page-table descriptors a bit.
 
 After that, bootstrap finished its work and the kernel was booting until it
 tried to switch to another thread.
+
+; tags used in this posting
+| armv8

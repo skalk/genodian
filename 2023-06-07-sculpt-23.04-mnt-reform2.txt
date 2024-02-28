@@ -117,3 +117,6 @@ To build a Sculpt OS image for MNT Reform2 issue the following in your build
 directory:
 
 ! build/arm_v8a$ make run/sculpt_image KERNEL=hw BOARD=mnt_reform2 DEPOT=omit
+
+; tags used in this posting
+| armv8 mntreform imx sculpt

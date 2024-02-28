@@ -108,4 +108,4 @@ Anyway, in my latest efforts this approach helped me a lot to have a working
 environment for other peripherals in the first place.
 
 ; tags used in this posting
-| jtag imx7 arm
+| jtag imx arm

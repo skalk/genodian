@@ -23,3 +23,6 @@ docker image on your own. Just checkout the following repository:
 
 To learn about how to use this little utility, please refer to the
 [https://genodians.org/skalk/2020-09-29-docker-devel - initial blog post] about it.
+
+; tags used in this posting
+| docker tooling

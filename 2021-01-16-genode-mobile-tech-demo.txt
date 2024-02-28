@@ -115,3 +115,6 @@ persistent. Thereby, it is loaded automatically as soon as the SD-card is gettin
 The whole demo is work-in-progress, and therefore all software is available
 as a [https://github.com/skalk/genode/tree/mobile_shell - topic-branch] only,
 and not necessarily part of the official Genode repositories.
+
+; tags used in this posting
+| armv8 imx sculpt

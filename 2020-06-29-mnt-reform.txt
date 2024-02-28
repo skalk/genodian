@@ -112,3 +112,6 @@ The next bigger issue I currently focus on is writing an i.MX 8MQ specific
 platform driver comprising clock & power management and to turn the drivers into
 using it. Moreover, it shall manage the PCI-x bus available, which is quite
 important to enable NVMe, or Wifi on the MNT Reform 2.
+
+; tags used in this posting
+| armv8 mntreform imx

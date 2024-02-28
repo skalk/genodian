@@ -117,4 +117,4 @@ but 'genodelabs' packages otherwise. This is one possible way to go:
 Finally, you only need to upload your packages and index file, et voila!
 
 ; tags used in this posting
-| depot packages virtualbox
+| depot packages vbox

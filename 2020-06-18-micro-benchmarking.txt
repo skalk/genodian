@@ -148,3 +148,6 @@ are written by hand in assembler. Anyway, even when using the same compiler due
 to the different environment the assembler routine is linked to, you have to
 define the alignment explicitely. Otherwise, you might compare completely
 different hardware code-pathes inside of the blackbox mystery called modern CPU.
+
+; tags used in this posting
+| profiling

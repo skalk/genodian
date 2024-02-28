@@ -122,3 +122,6 @@ framebuffer driver is still hardcoded to use the laptop's panel, but won't drive
 a monitor connected via HDMI. This will be changed soon too.
 
 _Edit (2021-09-29): updated to repository renaming of genode-imx.git_
+
+; tags used in this posting
+| armv8 mntreform imx sculpt

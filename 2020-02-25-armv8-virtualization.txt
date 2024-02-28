@@ -118,3 +118,6 @@ went out of synchronization.
 
 This observation indicates that the virtual counter offset provided by hardware
 is not helpful in general.
+
+; tags used in this posting
+| armv8 vmm

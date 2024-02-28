@@ -86,3 +86,6 @@ compilation targets, like:
 
 ! OBJECTS = $(wildcard $(LX_CONTRIB_DIR)/drivers/gpu/drm/imx/*.o)
 ! SRC_C  += $(OBJECTS:%.o=%.c)
+
+; tags used in this posting
+| linux driver

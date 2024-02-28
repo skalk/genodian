@@ -213,3 +213,6 @@ away everthing that was not needed.
 The next step was to call the right initialization routines in the kernel code,
 and to track and automatically generate missing references. But this is another
 story that will be part of a later blog post.
+
+; tags used in this posting
+| linux driver

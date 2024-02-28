@@ -115,3 +115,6 @@ or respectively:
 
 The resulting image is located at 'var/run/sculpt.img', and can be written to
 an SD-card, like described at the beginning of this post.
+
+; tags used in this posting
+| armv8 mntreform imx sculpt

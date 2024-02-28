@@ -68,3 +68,6 @@ might already know from the PC variant of Sculpt OS.
 Have fun!
 
 _Edit (2021-09-29): updated to repository renaming of genode-imx.git_
+
+; tags used in this posting
+| armv8 mntreform imx sculpt

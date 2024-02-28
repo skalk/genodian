@@ -94,3 +94,6 @@ Although not needed functionality-wise, the enablement of this feature was
 necessary to actually use an emulator like QEMU too.
 Otherwise, QEMU simply emulates long spining-loops of CPU-cores in the contention
 case, which renders it unuseable in the context of multiple cores.
+
+; tags used in this posting
+| armv8 imx

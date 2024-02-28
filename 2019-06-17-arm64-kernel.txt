@@ -48,4 +48,4 @@ In the next post, I'll write about how to debug system level startup code with
 QEMU.
 
 ; tags used in this posting
-| armv8 hw rpi3
+| armv8 hw raspberrypi

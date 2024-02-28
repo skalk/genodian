@@ -104,3 +104,6 @@ interrupts of the device will get injected one-by-one to the virtual CPU that is
 assigned to the peripheral.
 
 Given this abstraction it is easy to pass a bunch of I/O resources to a VM.
+
+; tags used in this posting
+| armv8 vmm

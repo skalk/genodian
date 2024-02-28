@@ -228,3 +228,6 @@ identify the absolute necessary C-files given a device-driver you want to port.
 
 _Edit (2021-06-04): updated initcall section_
 _Edit (2021-09-29): updated to repository renaming of genode-imx.git_
+
+; tags used in this posting
+| linux driver

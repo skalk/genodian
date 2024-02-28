@@ -97,3 +97,6 @@ plugins, and all the dependencies of third party software like QT5, sel4,
 Fiasco.OC, etc..
 
 _Edit (2021-06-01): updated to Genode's toolchain 21.05_
+
+; tags used in this posting
+| docker tooling
