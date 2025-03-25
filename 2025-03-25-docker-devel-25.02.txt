@@ -1,0 +1,34 @@
+           Docker image based on Ubuntu 24.04
+
+The pre-built docker image to easily develop Genode on top of arbitrary host
+systems got updated to a more recent Ubuntu 24.04 base system. Moreover, it now
+contains the Genode toolchain 23.05., Qemu 8.2, AMT tools to remote control x86
+hardware, CTAGs tools to facilitate Linux device driver porting, and all
+necessary host tools to run almost any kernel, board, and run-script
+combination. Please note: for the time being OKL4-based scenarios cannot be
+build using this container, because its tooling depends on the ancient Python
+2.6.
+
+The docker image is located at:
+
+[https://genode.org/files/genode-docker-25.02-image.tar]
+
+Its SHA1 hashsum is:
+
+! b1d8dcbfa0ca9b9a6bbc8c3aafa70637dddd6d68 genode-docker-25.02-image.tar
+
+For convenience reasons, and for all those who are not familiar with using
+docker, you can use a small wrapper tool. It comprises the steps to download and
+import the Genode development image, as well as to start a development
+container. At the same location you will find the recipe to build the very same
+docker image on your own. It also helps those, who do not want to use docker,
+but want to reproduce what is needed in a Debian/Ubuntu based Linux environment.
+Just checkout the following repository:
+
+! git clone https://github.com/skalk/genode-devel-docker.git
+
+To learn about how to use this little utility, please refer to the
+[https://genodians.org/skalk/2020-09-29-docker-devel - initial blog post] about it.
+
+; tags used in this posting
+| docker tooling
