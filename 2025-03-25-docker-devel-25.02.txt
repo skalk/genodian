@@ -15,7 +15,7 @@ The docker image is located at:
 
 Its SHA1 hashsum is:
 
-! b1d8dcbfa0ca9b9a6bbc8c3aafa70637dddd6d68 genode-docker-25.02-image.tar
+! 14661b5e86f7a2b655acac44c1a95c6e46dc8303 genode-docker-25.02-image.tar
 
 For convenience reasons, and for all those who are not familiar with using
 docker, you can use a small wrapper tool. It comprises the steps to download and
@@ -29,6 +29,8 @@ Just checkout the following repository:
 
 To learn about how to use this little utility, please refer to the
 [https://genodians.org/skalk/2020-09-29-docker-devel - initial blog post] about it.
+
+_Edit (2025-04-08): updated image hashsum due to image update_
 
 ; tags used in this posting
 | docker tooling
